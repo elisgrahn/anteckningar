@@ -29,6 +29,7 @@ export default function App() {
   // Den andra enheten har ändrat, men vi har egna osparade tecken.
   const [väntar, setVäntar] = useState(false);
   const [visaInnehåll, setVisaInnehåll] = useState(false);
+  const [visaStäd, setVisaStäd] = useState(false);
 
   // Vad servern senast sa, och vad vi senast skickade dit. Skillnaden
   // mellan de två är hela synkmodellen.
@@ -218,6 +219,31 @@ export default function App() {
     insertAtCursor(view, eget && !iMatte(view) ? '#' + t : t);
   };
 
+  // Alla figurer som inte nämns i texten, även de du raderat raden för. Till
+  // skillnad från väntande, som bara är de som aldrig kommit in i texten.
+  const oanvända = useMemo(() => {
+    if (source === null) return [];
+    return [...figures.keys()]
+      .map((k) => k.slice('figurer/'.length))
+      .filter((namn) => !source.includes(namn))
+      .sort();
+  }, [figures, source]);
+
+  const radera = async (namn) => {
+    if (!window.confirm(`Radera ${namn}? Filen försvinner från disken.`)) return;
+    try {
+      await api.raderaFigur(namn);
+      const kvar = new Map(figuresRef.current);
+      kvar.delete('figurer/' + namn);
+      figuresRef.current = kvar;
+      setFigures(kvar);
+      const { [namn]: _borta, ...rest } = sync.current.figurer;
+      sync.current.figurer = rest;
+    } catch (e) {
+      setStatus('kunde inte radera: ' + (e.message || e));
+    }
+  };
+
   // Innehållsförteckningen härleds ur källan, precis som väntande figurer.
   // Ingen Typst inblandad: rubrikerna står i klartext i dokumentet.
   const rubriker = useMemo(() => {
@@ -242,6 +268,11 @@ export default function App() {
         <button onClick={openCanvas}>
           {påFigur ? 'Redigera' : 'Rita'} <kbd>⌘D</kbd>
         </button>
+        {oanvända.length > 0 && (
+          <button className={visaStäd ? 'on' : ''} onClick={() => setVisaStäd((v) => !v)}>
+            Städa {oanvända.length}
+          </button>
+        )}
         {rubriker.length > 0 && (
           <button className={visaInnehåll ? 'on' : ''} onClick={() => setVisaInnehåll((v) => !v)}>
             Innehåll
@@ -266,6 +297,17 @@ export default function App() {
 
       <main className={'pane-' + pane}>
         <section className="left">
+          {visaStäd && (
+            <ul className="stad">
+              <li className="rubrik">Nämns inte i texten</li>
+              {oanvända.map((namn) => (
+                <li key={namn}>
+                  <span>{namn}</span>
+                  <button onClick={() => radera(namn)}>Radera</button>
+                </li>
+              ))}
+            </ul>
+          )}
           {visaInnehåll && (
             <ol className="innehall">
               {rubriker.map((r) => (

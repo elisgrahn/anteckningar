@@ -172,3 +172,18 @@ main > section { min-width: 0; overflow: hidden; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .symbolrad button.eget { border-color: var(--ink); }
+
+/* Städlistan: figurer som ligger på disken utan att nämnas i texten. */
+.stad {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  max-height: 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--lin);
+  background: #fafbfc;
+  font-size: 13px;
+}
+.stad li { display: flex; align-items: center; gap: 8px; padding: 4px 12px; }
+.stad li span { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.stad li.rubrik { color: #6b7280; padding-bottom: 2px; }

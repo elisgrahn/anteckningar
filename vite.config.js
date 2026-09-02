@@ -98,6 +98,16 @@ function filApi() {
           await fs.writeFile(p, await body(req));
           return json(res, 200, { mtime: await mtime(p) });
         }
+        // Radering sker bara på uttrycklig begäran från städlistan, aldrig
+        // automatiskt: en figur kan vara oanvänd för att stycket skrivs om.
+        if (req.method === 'DELETE') {
+          try {
+            await fs.unlink(p);
+          } catch (e) {
+            if (e.code !== 'ENOENT') throw e;
+          }
+          return json(res, 200, { raderad: true });
+        }
       }
 
       return json(res, 404, { fel: 'okänd väg' });

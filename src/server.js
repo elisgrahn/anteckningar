@@ -24,6 +24,10 @@ export function sparaFigur(namn, svg) {
   return fetch('/api/figur/' + encodeURIComponent(namn), { method: 'PUT', body: svg }).then(jsonOf);
 }
 
+export function raderaFigur(namn) {
+  return fetch('/api/figur/' + encodeURIComponent(namn), { method: 'DELETE' }).then(jsonOf);
+}
+
 export function nästaFigurnamn(figurer) {
   let n = 1;
   for (const namn of Object.keys(figurer)) {
