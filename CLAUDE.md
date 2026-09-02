@@ -151,11 +151,21 @@ Punkterna hålls i **ritade pixlar** (sidpunkter × `SCALE`), inte skärmpixlar,
 figuren blir lika stor oavsett skalning och snäpptröskorna betyder samma sak på
 båda ytorna.
 
-En fritt placerad figur ankras till sitt block och skrivs som
-`#place(dx:, dy:, image(...))` på raden **före** blocket. Före, inte efter: då är
-place-radens flödesposition densamma som blockets, alltså exakt den markör vi
-redan har — annars vet man inte var raden hamnar förrän efter omkompileringen.
-`#place` påverkar inte textflödet, mätt ord för ord.
+En fritt placerad figur skrivs som `#place(dx:, dy:, image(...))` som ett eget
+stycke, före **nästa** block — vilket textmässigt är efter det block figuren hör
+till. Det är avsiktligt: kopierar man en rubrik med allt under sig ska figuren
+följa med, och en figur ska inte ligga ovanför det den hör ihop med.
+
+Det går ihop med matematiken därför att en osynlig rad som eget stycke mellan
+två block har **samma flödesposition som blocket efter** — mätt, 89,05 pt i båda
+fallen. Därför är förskjutningen exakt trots att raden flyttats. `#place`
+påverkar inte textflödet, mätt ord för ord.
+
+Två fällor: **ankaret väljs på bläckets övre kant** (`inkTopLeft`), inte på det
+vadderade hörnet — vadderingen är 8 linjebredder, högre än en textrad, så en
+understrykning skulle annars ankra till stycket ovanför. Och `withMarkers`
+lägger en markör **efter sista raden**, annars finns inget att ankra mot för
+något ritat under allt annat.
 
 Ett snabbt tryck som inte rörde sig räknas som klick, inte märke, annars lämnar
 dubbelklicket som hoppar till källan två prickar efter sig.
