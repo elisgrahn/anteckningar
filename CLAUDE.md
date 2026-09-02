@@ -151,20 +151,30 @@ Punkterna hålls i **ritade pixlar** (sidpunkter × `SCALE`), inte skärmpixlar,
 figuren blir lika stor oavsett skalning och snäpptröskorna betyder samma sak på
 båda ytorna.
 
-En fritt placerad figur skrivs som `#place(dx:, dy:, image(...))` **omedelbart
-före sitt block, utan tom rad emellan**. De två måste höra ihop.
+En fritt placerad figur skrivs som `#place(dx:, dy:, image(...))` som ett eget
+stycke **efter** sitt block, alltså före nästa block. Kopierar man en rubrik med
+allt under sig följer figuren med.
 
-Att i stället lägga raden efter blocket läser bättre i källan och har prövats.
-Det håller inte: ett isolerat `#place`-block har ingen egen stabil
-flödesposition — den beror på vad som följer efter det, så ett nytt stycke efter
-figuren sköt ner figuren ovanpå det. Före sitt block är mätt stabil i alla fall:
-text efter lämnar den ifred, text före flyttar den exakt lika mycket, och att
-dess eget stycke växer rör den inte. `#place` påverkar inte textflödet, mätt ord
-för ord.
+Det hänger på **avslutaren**. `withMarkers` avslutar kopian med `#block()`
+(`SENTINEL`), och utan den håller inget av det här: ett osynligt block som är
+sist i flödet rapporterar en position en radhöjd för högt tills något följer
+efter det. Mätt isär:
 
-Priset är att raden står ovanför det den hör till, vilket är sämre att läsa och
-sämre att kopiera. Det är ett läsbarhetsproblem, inte ett korrekthetsproblem —
-lös det i editorn, inte genom att flytta raden.
+| | flödesposition | efter en redigering |
+|---|---|---|
+| place mellan två block | 91,30 | 91,30, stabil |
+| place sist i dokumentet | 78,10 | 91,30, hoppar |
+
+Prövade avslutare: `#block()` och `\` ger rätt position; vår egen markör,
+`#v(0pt)`, `#[]` och `#metadata(none)` gör det inte. `#block()` valdes för att
+den inte är en radbrytning. Den ändrar inte layouten, mätt ord för ord och på
+sidantal.
+
+**Den kända kostnaden:** filen på disk har ingen avslutare, så en figur som hör
+till *sista* blocket ritas cirka 13 pt högre av `typst compile` än av appen.
+Skillnaden gäller bara det sista blocket och försvinner så fort något skrivs
+efter det. Flyttas raden tillbaka till före sitt block försvinner kostnaden, men
+då står varje figur ovanför sin text i källan.
 
 Två fällor: **ankaret väljs på bläckets övre kant** (`inkTopLeft`), inte på det
 vadderade hörnet — vadderingen är 8 linjebredder, högre än en textrad, så en
