@@ -153,3 +153,22 @@ main > section { min-width: 0; overflow: hidden; }
   padding: 5px 12px;
 }
 .innehall button:hover { background: #eef1f5; }
+
+/* Symbolraden ligger under editorn, närmast tangentbordet där tummen är.
+   Rullar i sidled i stället för att radbrytas, så editorn behåller sin höjd. */
+.symbolrad {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--lin);
+  background: #fafbfc;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+}
+.symbolrad button {
+  flex: 0 0 auto;
+  min-width: 40px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.symbolrad button.eget { border-color: var(--ink); }

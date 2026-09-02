@@ -89,14 +89,26 @@ export function gåTill(view, pos) {
   view.focus();
 }
 
-/** Lägger in text vid markören som en enda ångra-bar ändring och behåller fokus. */
-export function insertAtCursor(view, text) {
+/**
+ * Lägger in text vid markören som en enda ångra-bar ändring och behåller fokus.
+ * `tillbaka` flyttar markören bakåt efteråt, för att hamna inuti ett par man
+ * just satt in.
+ */
+export function insertAtCursor(view, text, tillbaka = 0) {
   if (!view) return;
   const pos = view.state.selection.main.head;
   view.dispatch({
     changes: { from: pos, insert: text },
-    selection: { anchor: pos + text.length },
+    selection: { anchor: pos + text.length - tillbaka },
     scrollIntoView: true,
   });
   view.focus();
+}
+
+/** Står markören mellan två dollartecken? Avgör om ett makro sätts in som
+ *  `lg` eller som `#lg`, eftersom matteläget använder namnet naket. */
+export function iMatte(view) {
+  if (!view) return false;
+  const före = view.state.doc.sliceString(0, view.state.selection.main.head);
+  return (före.match(/\$/g) || []).length % 2 === 1;
 }

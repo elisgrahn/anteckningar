@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { figureAtCursor, gåTill, insertAtCursor, setDoc } from './Editor.jsx';
+import Editor, { figureAtCursor, gåTill, iMatte, insertAtCursor, setDoc } from './Editor.jsx';
+import Symbolrad, { makron } from './Symbolrad.jsx';
 import Canvas from './Canvas.jsx';
 import { compile } from './typst.js';
 import { fromSvg } from './ink.js';
@@ -207,6 +208,16 @@ export default function App() {
   // Alla på en gång, i namnordning, som en enda ångra-bar ändring.
   const infogaVäntande = () => insertAtCursor(viewRef.current, väntande.map(kod).join(''));
 
+  // Ett dollartecken sätts in som par med markören emellan. Ett makro sätts in
+  // naket i matteläge och med # utanför, eftersom det är så Typst vill ha det.
+  const infogaSymbol = (t) => {
+    const view = viewRef.current;
+    if (t === '$') return insertAtCursor(view, '$$', 1);
+    if (t === '(') return insertAtCursor(view, '()', 1);
+    const eget = source !== null && makron(source).includes(t);
+    insertAtCursor(view, eget && !iMatte(view) ? '#' + t : t);
+  };
+
   // Innehållsförteckningen härleds ur källan, precis som väntande figurer.
   // Ingen Typst inblandad: rubrikerna står i klartext i dokumentet.
   const rubriker = useMemo(() => {
@@ -278,6 +289,7 @@ export default function App() {
             onMarkör={setPåFigur}
             viewRef={viewRef}
           />
+          <Symbolrad source={source} onInfoga={infogaSymbol} />
           {errors.length > 0 && (
             <ul className="diags">
               {errors.slice(0, 4).map((d, i) => (
