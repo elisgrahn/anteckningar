@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Editor, { figureAtCursor, insertAtCursor, setDoc } from './Editor.jsx';
 import Canvas from './Canvas.jsx';
 import { compile } from './typst.js';
@@ -6,6 +6,11 @@ import { fromSvg } from './ink.js';
 import * as api from './server.js';
 
 const POLL_MS = 1500;
+
+// #image, inte #figure: det senare finns för numrering och korsreferenser
+// och skriver "Figur 1:" i utfallet, vilket inte är vad man vill ha under
+// en föreläsning.
+const kod = (namn) => `\n#image("figurer/${namn}")\n`;
 
 export default function App() {
   const viewRef = useRef(null);
@@ -24,6 +29,11 @@ export default function App() {
 
   const figuresRef = useRef(new Map());
   const sourceRef = useRef(null);
+
+  // Markörens position går inte att synka mellan enheter: ett offset i
+  // texten blir ogiltigt så fort den andra enheten skriver en bokstav.
+  // Alltså infogar bara den maskin som faktiskt har markören.
+  const harMarkör = useRef(false);
 
   const läsFigurer = useCallback(async (lista) => {
     const map = new Map(figuresRef.current);
@@ -141,19 +151,16 @@ export default function App() {
   }, [figures]);
 
   const finishCanvas = async (svgText) => {
-    const { namn, ny } = drawing;
+    const { namn } = drawing;
     try {
       const r = await api.sparaFigur(namn, svgText);
       sync.current.figurer = { ...sync.current.figurer, [namn]: r.mtime };
-      const ny = new Map(figuresRef.current).set('figurer/' + namn, api.tillBytes(svgText));
-      figuresRef.current = ny;
-      setFigures(ny);
-      if (ny) {
-        // #image, inte #figure: det senare finns för numrering och
-        // korsreferenser och skriver "Figur 1:" i utfallet, vilket inte är
-        // vad man vill ha under en föreläsning.
-        insertAtCursor(viewRef.current, `\n#image("figurer/${namn}")\n`);
-      }
+      const nya = new Map(figuresRef.current).set('figurer/' + namn, api.tillBytes(svgText));
+      figuresRef.current = nya;
+      setFigures(nya);
+      // Har markören aldrig varit i editorn, som på iPaden, lämnas figuren
+      // väntande i stället för att hamna på fel ställe.
+      if (harMarkör.current) insertAtCursor(viewRef.current, kod(namn));
       setDrawing(null);
     } catch (e) {
       setStatus('figuren sparades inte: ' + (e.message || e));
@@ -171,6 +178,20 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawing, openCanvas]);
 
+  // En figur är väntande om dess filnamn inte förekommer i källan. Det kräver
+  // ingen ny state på servern, och eftersom källan är delad ser alla klienter
+  // samma väntande figurer.
+  const väntande = useMemo(() => {
+    if (source === null) return [];
+    return [...figures.keys()]
+      .map((k) => k.slice('figurer/'.length))
+      .filter((namn) => !source.includes(namn))
+      .sort();
+  }, [figures, source]);
+
+  // Alla på en gång, i namnordning, som en enda ångra-bar ändring.
+  const infogaVäntande = () => insertAtCursor(viewRef.current, väntande.map(kod).join(''));
+
   if (source === null) return <div className="boot">Laddar…</div>;
 
   const errors = diags.filter((d) => d.severity === 'error');
@@ -182,6 +203,11 @@ export default function App() {
         <button onClick={openCanvas}>
           Rita <kbd>⌘D</kbd>
         </button>
+        {väntande.length > 0 && (
+          <button className="primary" onClick={infogaVäntande}>
+            {väntande.length === 1 ? '1 ny figur' : `${väntande.length} nya figurer`}
+          </button>
+        )}
         <div className="panes">
           {['kod', 'båda', 'utfall'].map((p) => (
             <button key={p} className={pane === p ? 'on' : ''} onClick={() => setPane(p)}>
@@ -196,7 +222,13 @@ export default function App() {
 
       <main className={'pane-' + pane}>
         <section className="left">
-          <Editor value={source} onChange={setSource} onDraw={openCanvas} viewRef={viewRef} />
+          <Editor
+            value={source}
+            onChange={setSource}
+            onDraw={openCanvas}
+            onFokus={() => (harMarkör.current = true)}
+            viewRef={viewRef}
+          />
           {errors.length > 0 && (
             <ul className="diags">
               {errors.slice(0, 4).map((d, i) => (
