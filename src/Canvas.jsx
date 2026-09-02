@@ -1,36 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
 import { getStroke } from 'perfect-freehand';
 import { toSvg, hitStroke, pathFromOutline } from './ink.js';
-import { känn } from './former.js';
+import { recognise } from './shapes.js';
 
 const COLORS = ['#16233d', '#b03030', '#1c6b45'];
 
-// Gesten: håll spetsen still i slutet av ett drag så snäpper det till en form.
-const HÅLL_MS = 500;
-const STILLA_PX = 4;
-const BLÄNK_MS = 1100;
-const HISTORIK = 60;
+// The gesture: hold the tip still at the end of a stroke and it snaps to a shape.
+const HOLD_MS = 500;
+const STILL_PX = 4;
+const FLASH_MS = 1100;
+const HISTORY_MAX = 60;
 
-const NAMN = { linje: 'linje', cirkel: 'cirkel', rektangel: 'rektangel' };
+const SHAPE_NAMES = { line: 'line', circle: 'circle', rectangle: 'rectangle' };
 
-// Färgen är en inställning, inte innehåll, och hör därför hemma i webbläsaren
-// och inte i dokumentet. Kan kasta i privat läge, alltså try/catch.
-const FÄRG_NYCKEL = 'anteckningar.färg';
-const sparadFärg = () => {
+// Undo works on the whole stroke list rather than popping the last stroke, so
+// that both erasing and a snapped shape can be taken back.
+function remember(st, state) {
+  st.undo.push(state);
+  if (st.undo.length > HISTORY_MAX) st.undo.shift();
+}
+
+// The colour is a setting, not content, and belongs in the browser rather than
+// in the document. Can throw in private mode, hence try/catch.
+//
+// The key stays Swedish on purpose: it is already written in people's browsers,
+// and renaming it would silently forget the colour they picked.
+const COLOR_KEY = 'anteckningar.färg';
+const savedColor = () => {
   try {
-    const f = localStorage.getItem(FÄRG_NYCKEL);
-    return COLORS.includes(f) ? f : COLORS[0];
+    const c = localStorage.getItem(COLOR_KEY);
+    return COLORS.includes(c) ? c : COLORS[0];
   } catch {
     return COLORS[0];
   }
 };
-
-// Ångra arbetar på hela draglistan i stället för att poppa sista draget, så
-// att både suddning och en snäppt form går att ta tillbaka.
-function minns(st, läge) {
-  st.ångra.push(läge);
-  if (st.ångra.length > HISTORIK) st.ångra.shift();
-}
 
 export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
   const boxRef = useRef(null);
@@ -41,27 +44,27 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     current: null,
     lastPenAt: 0,
     dirty: true,
-    ångra: [],
-    // Vila: var spetsen senast rörde sig mer än STILLA_PX, och när.
-    vilaVid: null,
-    sistRörd: 0,
-    prövad: false, // formen redan prövad i den här vilan
-    låst: false, // draget har snäppt och tar inte emot fler punkter
-    råa: null, // punkterna som faktiskt ritades, för Cmd-Z
-    blänk: null,
+    undo: [],
+    // Rest: where the tip last moved more than STILL_PX, and when.
+    restAt: null,
+    lastMovedAt: 0,
+    tested: false, // shape already tried at this rest position
+    locked: false, // the stroke has snapped and takes no more points
+    rawPoints: null, // the points actually drawn, for Cmd-Z
+    flash: null,
   });
 
-  const [tool, setTool] = useState('penna');
-  const [color, setColor] = useState(sparadFärg);
-  const [ångraAntal, setÅngraAntal] = useState(0);
-  const [form, setForm] = useState(null);
+  const [tool, setTool] = useState('pen');
+  const [color, setColor] = useState(savedColor);
+  const [undoCount, setUndoCount] = useState(0);
+  const [shape, setShape] = useState(null);
 
   const toolRef = useRef(tool);
   toolRef.current = tool;
   const colorRef = useRef(color);
   colorRef.current = color;
 
-  // Storleken mäts på behållaren, aldrig på canvasen som skalas om
+  // The size is measured on the container, never on the canvas that is resized
   useEffect(() => {
     const box = boxRef.current;
     const setup = () => {
@@ -83,7 +86,7 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     return () => ro.disconnect();
   }, []);
 
-  // Handloven ska inte kunna markera eller rulla medan pennan är i luften
+  // The wrist must not be able to select or scroll while the pen is in the air
   useEffect(() => {
     const block = (e) => {
       if (performance.now() - s.current.lastPenAt < 1500 && e.cancelable) e.preventDefault();
@@ -102,20 +105,20 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
       const st = s.current;
       const c = canvasRef.current;
 
-      // Prövningen ligger utanför dirty-blocket: står spetsen still kommer
-      // inga pointermove, och då är det ingenting som gör ritningen smutsig.
-      if (st.current && !st.låst && !st.prövad && performance.now() - st.sistRörd > HÅLL_MS) {
-        st.prövad = true;
-        const träff = känn(st.current.points);
-        if (träff) {
-          st.råa = st.current.points;
-          st.current = { ...st.current, points: träff.points };
-          st.låst = true;
-          st.blänk = { points: träff.points, width: st.current.width, slut: performance.now() + BLÄNK_MS };
+      // The test sits outside the dirty block: while the tip is still there are
+      // no pointermove events, and so nothing marks the drawing as dirty.
+      if (st.current && !st.locked && !st.tested && performance.now() - st.lastMovedAt > HOLD_MS) {
+        st.tested = true;
+        const hit = recognise(st.current.points);
+        if (hit) {
+          st.rawPoints = st.current.points;
+          st.current = { ...st.current, points: hit.points };
+          st.locked = true;
+          st.flash = { points: hit.points, width: st.current.width, until: performance.now() + FLASH_MS };
           st.dirty = true;
-          setForm(NAMN[träff.typ]);
-          clearTimeout(st.formTimer);
-          st.formTimer = setTimeout(() => setForm(null), 1400);
+          setShape(SHAPE_NAMES[hit.kind]);
+          clearTimeout(st.shapeTimer);
+          st.shapeTimer = setTimeout(() => setShape(null), 1400);
         }
       }
 
@@ -124,31 +127,32 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
         const dpr = window.devicePixelRatio || 1;
         ctx.clearRect(0, 0, c.width / dpr, c.height / dpr);
 
-        // Ett blänk bakom formen när den snäppt, så man ser att det hände.
-        if (st.blänk) {
-          const kvar = (st.blänk.slut - performance.now()) / BLÄNK_MS;
-          if (kvar <= 0) st.blänk = null;
+        // A flash behind the shape when it snaps, so you can see that it did.
+        if (st.flash) {
+          const left = (st.flash.until - performance.now()) / FLASH_MS;
+          if (left <= 0) st.flash = null;
           else {
-            // last: true även här. Utan den slutar halon före strecket, och
-            // felet skalar med bredden: en snäppt linje har bara två punkter,
-            // och med åtta gånger bredden saknas över trettio pixlar i änden.
-            const halo = getStroke(st.blänk.points, {
-              size: st.blänk.width * 8,
+            // last: true here too. Without it the halo ends before the stroke,
+            // and the error scales with the width: a snapped line has only two
+            // points, and at eight times the line width over thirty pixels are
+            // missing at the end.
+            const halo = getStroke(st.flash.points, {
+              size: st.flash.width * 8,
               thinning: 0,
               simulatePressure: false,
               last: true,
             });
-            ctx.fillStyle = `rgba(28, 107, 69, ${(0.25 * kvar).toFixed(3)})`;
+            ctx.fillStyle = `rgba(28, 107, 69, ${(0.25 * left).toFixed(3)})`;
             ctx.fill(new Path2D(pathFromOutline(halo)));
           }
         }
 
         const all = st.current ? [...st.strokes, st.current] : st.strokes;
         for (const stroke of all) {
-          // thinning/simulatePressure avstängda: fast bredd (stroke.width),
-          // inget gissat tryck. getStroke klarar en enda punkt (blir en prick).
-          // last: true drar konturen hela vägen fram till sista punkten —
-          // utan den slutar strecket ett par pixlar bakom pennan.
+          // thinning/simulatePressure off: fixed width (stroke.width), no
+          // guessed pressure. getStroke handles a single point (a dot) itself.
+          // last: true draws the outline all the way to the final point —
+          // without it the stroke ends a couple of pixels behind the pen.
           const outline = getStroke(stroke.points, {
             size: stroke.width,
             thinning: 0,
@@ -159,8 +163,8 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
           ctx.fillStyle = stroke.color;
           ctx.fill(new Path2D(pathFromOutline(outline)));
         }
-        // Blänket bleknar, alltså måste nästa bild ritas om ändå.
-        st.dirty = Boolean(st.blänk);
+        // The flash is fading, so the next frame has to be drawn anyway.
+        st.dirty = Boolean(st.flash);
       }
       raf = requestAnimationFrame(draw);
     };
@@ -179,22 +183,22 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
       st.lastPenAt = performance.now();
       return true;
     }
-    // Fingret får rita bara om ingen penna varit i bruk nyligen
+    // A finger may draw only if no pen has been in use recently
     return performance.now() - st.lastPenAt > 1500;
   };
 
   const erase = (x, y) => {
     const st = s.current;
-    const kvar = st.strokes.filter((stroke) => !hitStroke(stroke, x, y, 14));
-    if (kvar.length === st.strokes.length) return;
-    // En hel suddning är ett ångra-steg, inte ett per träffat drag.
-    if (!st.suddat) {
-      minns(st, st.strokes);
-      st.suddat = true;
+    const left = st.strokes.filter((stroke) => !hitStroke(stroke, x, y, 14));
+    if (left.length === st.strokes.length) return;
+    // A whole erasing pass is one undo step, not one per stroke hit.
+    if (!st.erasedThisDrag) {
+      remember(st, st.strokes);
+      st.erasedThisDrag = true;
     }
-    st.strokes = kvar;
+    st.strokes = left;
     st.dirty = true;
-    setÅngraAntal(st.ångra.length);
+    setUndoCount(st.undo.length);
   };
 
   const onDown = (e) => {
@@ -202,16 +206,16 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = local(e);
     const st = s.current;
-    if (toolRef.current === 'sudd') {
-      st.suddat = false;
+    if (toolRef.current === 'eraser') {
+      st.erasedThisDrag = false;
       return erase(p.x, p.y);
     }
     st.current = { color: colorRef.current, width: 2.4, points: [p] };
-    st.vilaVid = p;
-    st.sistRörd = performance.now();
-    st.prövad = false;
-    st.låst = false;
-    st.råa = null;
+    st.restAt = p;
+    st.lastMovedAt = performance.now();
+    st.tested = false;
+    st.locked = false;
+    st.rawPoints = null;
     st.dirty = true;
   };
 
@@ -220,21 +224,21 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     if (e.buttons === 0) return;
     if (!allowed(e)) return;
     const evs = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
-    if (toolRef.current === 'sudd') {
+    if (toolRef.current === 'eraser') {
       for (const ev of evs) {
         const p = local(ev);
         erase(p.x, p.y);
       }
       return;
     }
-    if (!st.current || st.låst) return; // efter ett snäpp ligger formen fast
+    if (!st.current || st.locked) return; // after a snap the shape stays put
     for (const ev of evs) {
       const p = local(ev);
       st.current.points.push(p);
-      if (Math.hypot(p.x - st.vilaVid.x, p.y - st.vilaVid.y) > STILLA_PX) {
-        st.vilaVid = p;
-        st.sistRörd = performance.now();
-        st.prövad = false;
+      if (Math.hypot(p.x - st.restAt.x, p.y - st.restAt.y) > STILL_PX) {
+        st.restAt = p;
+        st.lastMovedAt = performance.now();
+        st.tested = false;
       }
     }
     st.dirty = true;
@@ -243,26 +247,26 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
   const onUp = () => {
     const st = s.current;
     if (!st.current) return;
-    const klar = st.current;
-    minns(st, st.strokes);
-    // Snäppte draget läggs den ritade formen in som ett eget steg, så att
-    // första Cmd-Z ger tillbaka den i stället för att radera draget.
-    if (st.råa) minns(st, [...st.strokes, { ...klar, points: st.råa }]);
-    st.strokes = [...st.strokes, klar];
+    const finished = st.current;
+    remember(st, st.strokes);
+    // If the stroke snapped, the drawn shape goes in as its own step, so the
+    // first Cmd-Z gives it back instead of deleting the stroke.
+    if (st.rawPoints) remember(st, [...st.strokes, { ...finished, points: st.rawPoints }]);
+    st.strokes = [...st.strokes, finished];
     st.current = null;
-    st.råa = null;
-    st.låst = false;
+    st.rawPoints = null;
+    st.locked = false;
     st.dirty = true;
-    setÅngraAntal(st.ångra.length);
+    setUndoCount(st.undo.length);
   };
 
   const undo = () => {
     const st = s.current;
-    const förra = st.ångra.pop();
-    if (!förra) return;
-    st.strokes = förra;
+    const previous = st.undo.pop();
+    if (!previous) return;
+    st.strokes = previous;
     st.dirty = true;
-    setÅngraAntal(st.ångra.length);
+    setUndoCount(st.undo.length);
   };
 
   const done = () => {
@@ -270,8 +274,8 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     onDone(toSvg(s.current.strokes), s.current.strokes);
   };
 
-  // Tangentbordet är verktygsväxlaren, eftersom pennans dubbeltryck
-  // och kläm inte är tillgängliga för webbsidor.
+  // The keyboard is the tool switcher, since the pencil's double tap and
+  // squeeze are not available to a web page.
   useEffect(() => {
     const held = new Set();
     const down = (e) => {
@@ -283,13 +287,13 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
       }
       if (e.key === 'e' && !held.has('e')) {
         held.add('e');
-        setTool('sudd');
+        setTool('eraser');
       }
     };
     const up = (e) => {
       if (e.key === 'e') {
         held.delete('e');
-        setTool('penna');
+        setTool('pen');
       }
     };
     window.addEventListener('keydown', down);
@@ -305,38 +309,38 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
       <div className="overlay-bar">
         <strong>{name}</strong>
         <div className="tools">
-          <button className={tool === 'penna' ? 'on' : ''} onClick={() => setTool('penna')}>
-            Penna
+          <button className={tool === 'pen' ? 'on' : ''} onClick={() => setTool('pen')}>
+            Pen
           </button>
-          <button className={tool === 'sudd' ? 'on' : ''} onClick={() => setTool('sudd')}>
-            Sudd <kbd>E</kbd>
+          <button className={tool === 'eraser' ? 'on' : ''} onClick={() => setTool('eraser')}>
+            Eraser <kbd>E</kbd>
           </button>
           {COLORS.map((c) => (
             <button
               key={c}
               onClick={() => {
                 setColor(c);
-                setTool('penna');
+                setTool('pen');
                 try {
-                  localStorage.setItem(FÄRG_NYCKEL, c);
+                  localStorage.setItem(COLOR_KEY, c);
                 } catch {
-                  /* privat läge, färgen gäller bara den här sessionen */
+                  /* private mode, the colour lasts for this session only */
                 }
               }}
               className={'swatch' + (c === color ? ' on' : '')}
               style={{ background: c }}
-              aria-label={'Färg ' + c}
+              aria-label={'Colour ' + c}
             />
           ))}
-          <button onClick={undo} disabled={!ångraAntal}>
-            Ångra
+          <button onClick={undo} disabled={!undoCount}>
+            Undo
           </button>
-          {form && <span className="snäpp">{form}</span>}
+          {shape && <span className="snap">{shape}</span>}
         </div>
         <div className="right">
-          <button onClick={onCancel}>Avbryt <kbd>Esc</kbd></button>
+          <button onClick={onCancel}>Cancel <kbd>Esc</kbd></button>
           <button className="primary" onClick={done}>
-            Klar <kbd>⌘⏎</kbd>
+            Done <kbd>⌘⏎</kbd>
           </button>
         </div>
       </div>

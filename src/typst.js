@@ -3,11 +3,11 @@ import { createTypstRenderer } from '@myriaddreamin/typst.ts/renderer';
 import { loadFonts } from '@myriaddreamin/typst.ts';
 import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url';
 import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url';
-import { medMarkörer, tolka, ursprungsrad } from './markorer.js';
+import { withMarkers, parseMarkers, originalLine } from './sourcemap.js';
 
-// Typst har inga typsnitt inbyggda i wasm-modulen. Utan de här filerna
-// kompilerar ingenting som innehåller text, och matten kräver särskilt
-// NewCMMath. De ligger i public/fonts och måste cachas för offline-bruk.
+// Typst has no fonts built into the wasm module. Without these files nothing
+// containing text compiles, and the math needs NewCMMath in particular. They
+// live in public/fonts and must be cached for offline use.
 const FONT_FILES = [
   'LibertinusSerif-Regular.otf',
   'LibertinusSerif-Bold.otf',
@@ -45,15 +45,16 @@ async function start() {
 }
 
 /**
- * Kompilerar källan till en SVG-sträng, och tar samtidigt reda på var raderna
- * hamnade på sidorna.
+ * Compiles the source to an SVG string, and works out at the same time where
+ * the lines landed on the pages.
  *
- * figures: Map<string, Uint8Array> med sökväg relativt roten, t.ex. "figurer/f-01.svg".
+ * figures: Map<string, Uint8Array> keyed by path relative to the root, e.g.
+ * "figurer/f-01.svg".
  *
- * Det som kompileras är en kopia med osynliga markörer, aldrig texten som
- * ligger på disk. Positionerna kommer ur samma kompilering som artefakten, via
- * runWithWorld — ett ensamt query() misslyckas med "document is not compiled",
- * eftersom det tar en färsk snapshot utan att kompilera.
+ * What gets compiled is a copy carrying invisible markers, never the text on
+ * disk. The positions come out of the same compilation as the artifact, via
+ * runWithWorld — a lone query() fails with "document is not compiled", since it
+ * takes a fresh snapshot without compiling.
  */
 export async function compile(source, figures = new Map()) {
   const { compiler, renderer } = await boot();
@@ -62,35 +63,36 @@ export async function compile(source, figures = new Map()) {
   for (const [path, bytes] of figures) {
     compiler.mapShadow('/' + path.replace(/^\//, ''), bytes);
   }
-  const { text, karta } = medMarkörer(source);
+  const { text, map } = withMarkers(source);
   compiler.addSource(MAIN, text);
 
   const started = performance.now();
-  const { artefakt, rå, diagnostik } = await compiler.runWithWorld({ mainFilePath: MAIN }, async (world) => {
-    const körd = await world.compile();
-    const vektor = await world.vector();
-    let rå = [];
+  const { artifact, raw, reported } = await compiler.runWithWorld({ mainFilePath: MAIN }, async (world) => {
+    const run = await world.compile();
+    const vector = await world.vector();
+    let raw = [];
     try {
-      rå = await world.query({ selector: '<am>', field: 'value' });
+      raw = await world.query({ selector: '<am>', field: 'value' });
     } catch {
-      // Markörerna är en bonus. Går de förlorade ska dokumentet ändå visas.
+      // The markers are a bonus. If they are lost the document still shows.
     }
-    return { artefakt: vektor?.result, rå, diagnostik: körd?.diagnostics ?? vektor?.diagnostics };
+    return { artifact: vector?.result, raw, reported: run?.diagnostics ?? vector?.diagnostics };
   });
 
-  // Radnumren gäller kopian med markörer, alltså inte det användaren ser.
-  const diagnostics = (diagnostik ?? []).map((d) => ({
+  // The reported line numbers refer to the copy with markers, not to what the
+  // user sees.
+  const diagnostics = (reported ?? []).map((d) => ({
     severity: d.severity,
     message: d.message,
-    line: ursprungsrad(karta, Number(String(d.range ?? '').split(':')[0]) || 0),
+    line: originalLine(map, Number(String(d.range ?? '').split(':')[0]) || 0),
   }));
 
-  if (!artefakt) return { svg: null, diagnostics, ms: performance.now() - started, markörer: [], sidor: [] };
+  if (!artifact) return { svg: null, diagnostics, ms: performance.now() - started, markers: [], pages: [] };
 
-  const { svg, sidor } = await renderer.runWithSession({ artifactContent: artefakt }, async (session) => ({
-    sidor: session.retrievePagesInfo(),
+  const { svg, pages } = await renderer.runWithSession({ artifactContent: artifact }, async (session) => ({
+    pages: session.retrievePagesInfo(),
     svg: await renderer.renderSvg({ renderSession: session }),
   }));
 
-  return { svg, diagnostics, ms: performance.now() - started, markörer: tolka(rå), sidor };
+  return { svg, diagnostics, ms: performance.now() - started, markers: parseMarkers(raw), pages };
 }

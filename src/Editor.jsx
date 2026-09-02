@@ -4,33 +4,33 @@ import { EditorState, Prec } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { typstSpråk } from './typstsprak.js';
+import { typstLanguage } from './typstlang.js';
 
-// CodeMirror i stället för Monaco: Monaco är byggd för mus och tangentbord
-// och beter sig illa med pekskärm och iPad-tangentbord.
-export default function Editor({ value, onChange, onDraw, onMarkör, viewRef }) {
+// CodeMirror rather than Monaco: Monaco is built for mouse and keyboard and
+// behaves badly with a touch screen and the iPad keyboard.
+export default function Editor({ value, onChange, onDraw, onCursor, viewRef }) {
   const host = useRef(null);
 
-  // Editorn skapas en gång, men props byter identitet vid varje render.
-  // Utan den här refen stänger keymapen om första renderns callbacks och
-  // ritar med en tom figurlista.
-  const senaste = useRef(null);
-  senaste.current = { onChange, onDraw, onMarkör };
+  // The editor is created once, but props change identity on every render.
+  // Without this ref the keymap closes over the first render's callbacks and
+  // draws with an empty figure list.
+  const latest = useRef(null);
+  latest.current = { onChange, onDraw, onCursor };
 
   useEffect(() => {
     const view = new EditorView({
       parent: host.current,
       state: EditorState.create({
         doc: value,
-        // Sist i dokumentet, inte först. Anteckningar växer nedåt, så det är
-        // där nästa figur ska in om man inte flyttat markören själv.
+        // At the end of the document, not the start. Notes grow downwards, so
+        // that is where the next figure goes unless the cursor was moved.
         selection: { anchor: value.length },
         extensions: [
           history(),
           highlightActiveLine(),
-          typstSpråk,
-          // Utan syntaxHighlighting får taggarna ingen färg alls — språket
-          // ensamt räcker inte.
+          typstLanguage,
+          // Without syntaxHighlighting the tags get no colour at all — the
+          // language on its own is not enough.
           syntaxHighlighting(defaultHighlightStyle),
           search(),
           EditorView.lineWrapping,
@@ -40,7 +40,7 @@ export default function Editor({ value, onChange, onDraw, onMarkör, viewRef }) 
                 key: 'Mod-d',
                 preventDefault: true,
                 run: () => {
-                  senaste.current.onDraw();
+                  latest.current.onDraw();
                   return true;
                 },
               },
@@ -48,9 +48,9 @@ export default function Editor({ value, onChange, onDraw, onMarkör, viewRef }) 
           ),
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
-            if (u.docChanged) senaste.current.onChange(u.state.doc.toString());
-            // Står markören på en figurrad byter knappen namn till Redigera.
-            if (u.docChanged || u.selectionSet) senaste.current.onMarkör(figureAtCursor(u.view));
+            if (u.docChanged) latest.current.onChange(u.state.doc.toString());
+            // On a figure line the button changes its name to Edit.
+            if (u.docChanged || u.selectionSet) latest.current.onCursor(figureAtCursor(u.view));
           }),
           EditorView.theme({
             '&': { height: '100%', fontSize: '15px' },
@@ -62,14 +62,14 @@ export default function Editor({ value, onChange, onDraw, onMarkör, viewRef }) 
     });
     viewRef.current = view;
     return () => view.destroy();
-    // Editorn skapas en gång; texten ägs sedan av CodeMirror.
+    // The editor is created once; the text is owned by CodeMirror after that.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <div className="editor" ref={host} />;
 }
 
-/** Byter ut hela texten utifrån, utan att kasta bort markörens position. */
+/** Replaces the whole text from outside without losing the cursor position. */
 export function setDoc(view, text) {
   if (!view || view.state.doc.toString() === text) return;
   const head = Math.min(view.state.selection.main.head, text.length);
@@ -79,7 +79,7 @@ export function setDoc(view, text) {
   });
 }
 
-/** Sökväg till figuren på raden där markören står, om det finns någon. */
+/** Path to the figure on the cursor's line, if there is one. */
 export function figureAtCursor(view) {
   if (!view) return null;
   const line = view.state.doc.lineAt(view.state.selection.main.head).text;
@@ -87,17 +87,17 @@ export function figureAtCursor(view) {
   return m ? m[1] : null;
 }
 
-/** Flyttar markören till början av en rad och rullar dit. */
-export function gåTillRad(view, rad) {
+/** Moves the cursor to the start of a line and scrolls there. */
+export function goToLine(view, line) {
   if (!view) return;
-  const nr = Math.min(Math.max(rad + 1, 1), view.state.doc.lines);
-  const träffad = view.state.doc.line(nr);
-  view.dispatch({ selection: { anchor: träffad.from }, scrollIntoView: true });
+  const nr = Math.min(Math.max(line + 1, 1), view.state.doc.lines);
+  const target = view.state.doc.line(nr);
+  view.dispatch({ selection: { anchor: target.from }, scrollIntoView: true });
   view.focus();
 }
 
-/** Flyttar markören till en position i texten och rullar dit. */
-export function gåTill(view, pos) {
+/** Moves the cursor to a position in the text and scrolls there. */
+export function goTo(view, pos) {
   if (!view) return;
   const p = Math.min(pos, view.state.doc.length);
   view.dispatch({ selection: { anchor: p }, scrollIntoView: true });
@@ -105,25 +105,25 @@ export function gåTill(view, pos) {
 }
 
 /**
- * Lägger in text vid markören som en enda ångra-bar ändring och behåller fokus.
- * `tillbaka` flyttar markören bakåt efteråt, för att hamna inuti ett par man
- * just satt in.
+ * Inserts text at the cursor as a single undoable change, keeping focus.
+ * `back` moves the cursor backwards afterwards, to land inside a pair that was
+ * just inserted.
  */
-export function insertAtCursor(view, text, tillbaka = 0) {
+export function insertAtCursor(view, text, back = 0) {
   if (!view) return;
   const pos = view.state.selection.main.head;
   view.dispatch({
     changes: { from: pos, insert: text },
-    selection: { anchor: pos + text.length - tillbaka },
+    selection: { anchor: pos + text.length - back },
     scrollIntoView: true,
   });
   view.focus();
 }
 
-/** Står markören mellan två dollartecken? Avgör om ett makro sätts in som
- *  `lg` eller som `#lg`, eftersom matteläget använder namnet naket. */
-export function iMatte(view) {
+/** Is the cursor between two dollar signs? Decides whether a macro is inserted
+ *  as `lg` or as `#lg`, since math mode uses the name bare. */
+export function inMath(view) {
   if (!view) return false;
-  const före = view.state.doc.sliceString(0, view.state.selection.main.head);
-  return (före.match(/\$/g) || []).length % 2 === 1;
+  const before = view.state.doc.sliceString(0, view.state.selection.main.head);
+  return (before.match(/\$/g) || []).length % 2 === 1;
 }

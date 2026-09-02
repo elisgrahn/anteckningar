@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { figureAtCursor, gåTill, gåTillRad, iMatte, insertAtCursor, setDoc } from './Editor.jsx';
-import { radVid, sidaVid } from './markorer.js';
-import Symbolrad, { makron } from './Symbolrad.jsx';
+import Editor, { figureAtCursor, goTo, goToLine, inMath, insertAtCursor, setDoc } from './Editor.jsx';
+import { lineAt, pageAt } from './sourcemap.js';
+import SymbolRow, { macros } from './SymbolRow.jsx';
 import Canvas from './Canvas.jsx';
 import { compile } from './typst.js';
 import { fromSvg } from './ink.js';
@@ -9,10 +9,13 @@ import * as api from './server.js';
 
 const POLL_MS = 1500;
 
-// #image, inte #figure: det senare finns för numrering och korsreferenser
-// och skriver "Figur 1:" i utfallet, vilket inte är vad man vill ha under
-// en föreläsning.
-const kod = (namn) => `\n#image("figurer/${namn}")\n`;
+// The figure directory keeps its Swedish name: it is a path inside the user's
+// document, referenced from main.typ, not an identifier in this code.
+const FIG_DIR = 'figurer/';
+
+// #image, not #figure: the latter exists for numbering and cross-references and
+// writes "Figure 1:" in the output, which is not what you want during a lecture.
+const figureCode = (name) => `\n#image("${FIG_DIR}${name}")\n`;
 
 export default function App() {
   const viewRef = useRef(null);
@@ -20,124 +23,130 @@ export default function App() {
   const [source, setSource] = useState(null);
   const [figures, setFigures] = useState(new Map()); // "figurer/x.svg" -> Uint8Array
   const [svg, setSvg] = useState('');
-  // Var raderna hamnade i den senaste renderingen. Hör ihop med just den svg:n
-  // och byts ut samtidigt som den, annars pekar de fel efter ett tangenttryck.
-  const [utfall, setUtfall] = useState({ markörer: [], sidor: [] });
+  // Where the lines landed in the latest rendering. Belongs to that exact svg
+  // and is replaced together with it, or it would point wrong after a keystroke.
+  const [layout, setLayout] = useState({ markers: [], pages: [] });
   const [diags, setDiags] = useState([]);
-  const [status, setStatus] = useState('startar');
+  const [status, setStatus] = useState('starting');
   const [drawing, setDrawing] = useState(null);
-  const [pane, setPane] = useState('båda');
-  // Figuren på markörens rad, om någon. Sätts av editorn vid varje flytt;
-  // samma värde två gånger i rad ger ingen omritning.
-  const [påFigur, setPåFigur] = useState(null);
-  // Den andra enheten har ändrat, men vi har egna osparade tecken.
-  const [väntar, setVäntar] = useState(false);
-  const [visaInnehåll, setVisaInnehåll] = useState(false);
-  const [visaStäd, setVisaStäd] = useState(false);
+  const [pane, setPane] = useState('both');
+  // The figure on the cursor's line, if any. Set by the editor on every move;
+  // the same value twice in a row causes no re-render.
+  const [onFigure, setOnFigure] = useState(null);
+  // The other device has changed something, but we have unsaved characters.
+  const [waiting, setWaiting] = useState(false);
+  const [showOutline, setShowOutline] = useState(false);
+  const [showCleanup, setShowCleanup] = useState(false);
 
-  // Vad servern senast sa, och vad vi senast skickade dit. Skillnaden
-  // mellan de två är hela synkmodellen.
-  const sync = useRef({ mtime: 0, sparad: null, figurer: {}, skriver: false });
+  // What the server last said, and what we last sent there. The difference
+  // between the two is the whole sync model.
+  //
+  // `loaded` guards against the one way this app can destroy your work: a
+  // failed first load falls back to an empty editor so you never get stuck on
+  // "Loading…" (invariant 6), and the autosave would then happily write that
+  // emptiness to disk. Nothing is saved until a load has actually succeeded.
+  const sync = useRef({ mtime: 0, saved: null, figures: {}, writing: false, loaded: false });
 
   const figuresRef = useRef(new Map());
   const sourceRef = useRef(null);
 
-  // Figurnamn som stått i källan någon gång sedan sidan laddades.
-  const settFörut = useRef(new Set());
+  // Figure names that have appeared in the source at some point since load.
+  const seenBefore = useRef(new Set());
 
-
-  const läsFigurer = useCallback(async (lista) => {
+  const loadFigures = useCallback(async (list) => {
     const map = new Map(figuresRef.current);
-    for (const [namn, m] of Object.entries(lista)) {
-      const nyckel = 'figurer/' + namn;
-      if (sync.current.figurer[namn] === m && map.has(nyckel)) continue;
+    for (const [name, m] of Object.entries(list)) {
+      const key = FIG_DIR + name;
+      if (sync.current.figures[name] === m && map.has(key)) continue;
       try {
-        const { svg } = await api.hämtaFigur(namn);
-        map.set(nyckel, api.tillBytes(svg));
+        const { svg } = await api.fetchFigure(name);
+        map.set(key, api.toBytes(svg));
       } catch {
-        /* hoppa över, nästa poll försöker igen */
+        /* skip it, the next poll tries again */
       }
     }
-    for (const nyckel of [...map.keys()]) {
-      if (!lista[nyckel.slice('figurer/'.length)]) map.delete(nyckel);
+    for (const key of [...map.keys()]) {
+      if (!list[key.slice(FIG_DIR.length)]) map.delete(key);
     }
-    sync.current.figurer = lista;
+    sync.current.figures = list;
     return map;
   }, []);
 
-  // Hämta tillståndet, både vid start och på poll
-  const dra = useCallback(
-    async (första = false) => {
-      const s = await api.hämtaTillstånd();
-      const egnaÄndringar = !första && sync.current.sparad !== null && sync.current.sparad !== sourceRef.current;
+  // Fetch the state, both at start and on every poll
+  const pull = useCallback(
+    async (first = false) => {
+      const s = await api.fetchState();
+      if (typeof s?.source !== 'string' || !s.figures) throw new Error('unexpected state from the server');
+      sync.current.loaded = true;
+      const ownEdits = !first && sync.current.saved !== null && sync.current.saved !== sourceRef.current;
 
-      // Blockeringen är rätt — dina osparade tecken ska inte skrivas över —
-      // men den var tyst, så den andra enhetens text fanns utan att synas.
-      setVäntar(s.mtime !== sync.current.mtime && (egnaÄndringar || sync.current.skriver));
+      // Blocking is right — your unsaved characters must not be overwritten —
+      // but it was silent, so the other device's text existed without showing.
+      setWaiting(s.mtime !== sync.current.mtime && (ownEdits || sync.current.writing));
 
-      if (s.mtime !== sync.current.mtime && !egnaÄndringar && !sync.current.skriver) {
+      if (s.mtime !== sync.current.mtime && !ownEdits && !sync.current.writing) {
         sync.current.mtime = s.mtime;
-        sync.current.sparad = s.source;
+        sync.current.saved = s.source;
         setSource(s.source);
         setDoc(viewRef.current, s.source);
-      } else if (första) {
+      } else if (first) {
         sync.current.mtime = s.mtime;
-        sync.current.sparad = s.source;
+        sync.current.saved = s.source;
         setSource(s.source);
       }
 
-      // Allt som redan låg på disken vid start räknas som sett, även om det
-      // inte står i texten. Annars skulle en figur vars rad raderats i går
-      // dyka upp som ny efter varje omladdning.
-      if (första) for (const namn of Object.keys(s.figurer)) settFörut.current.add(namn);
+      // Everything already on disk at start counts as seen, even if it is not
+      // in the text. Otherwise a figure whose line was deleted yesterday would
+      // show up as new after every reload.
+      if (first) for (const name of Object.keys(s.figures)) seenBefore.current.add(name);
 
-      const nu = figuresRef.current;
-      const ny = await läsFigurer(s.figurer);
-      if (ny.size !== nu.size || [...ny.keys()].some((k) => nu.get(k) !== ny.get(k))) {
-        figuresRef.current = ny;
-        setFigures(ny);
+      const now = figuresRef.current;
+      const next = await loadFigures(s.figures);
+      if (next.size !== now.size || [...next.keys()].some((k) => now.get(k) !== next.get(k))) {
+        figuresRef.current = next;
+        setFigures(next);
       }
     },
-    [läsFigurer],
+    [loadFigures],
   );
 
   sourceRef.current = source;
   figuresRef.current = figures;
 
   useEffect(() => {
-    dra(true).catch((e) => {
-      setStatus('ingen kontakt: ' + (e.message || e));
+    pull(true).catch((e) => {
+      setStatus('no connection: ' + (e.message || e));
       setSource('');
     });
-  }, [dra]);
+  }, [pull]);
 
   useEffect(() => {
     const id = setInterval(() => {
-      dra().catch(() => setStatus('ingen kontakt'));
+      pull().catch(() => setStatus('no connection'));
     }, POLL_MS);
     return () => clearInterval(id);
-  }, [dra]);
+  }, [pull]);
 
-  // Spara till servern, med paus. Misslyckas det ligger texten kvar och
-  // nästa tangenttryck försöker igen.
+  // Save to the server, debounced. If it fails the text is still there and the
+  // next keystroke tries again.
   useEffect(() => {
-    if (source === null || source === sync.current.sparad) return;
+    if (!sync.current.loaded || source === null || source === sync.current.saved) return;
     const id = setTimeout(async () => {
-      sync.current.skriver = true;
+      sync.current.writing = true;
       try {
-        const r = await api.sparaDokument(source);
+        const r = await api.saveDoc(source);
         sync.current.mtime = r.mtime;
-        sync.current.sparad = source;
+        sync.current.saved = source;
       } catch (e) {
-        setStatus('sparar inte: ' + (e.message || e));
+        setStatus('not saving: ' + (e.message || e));
       } finally {
-        sync.current.skriver = false;
+        sync.current.writing = false;
       }
     }, 400);
     return () => clearTimeout(id);
   }, [source]);
 
-  // Kompilera
+  // Compile
   useEffect(() => {
     if (source === null) return;
     let alive = true;
@@ -147,7 +156,7 @@ export default function App() {
         if (!alive) return;
         if (res.svg) {
           setSvg(res.svg);
-          setUtfall({ markörer: res.markörer, sidor: res.sidor });
+          setLayout({ markers: res.markers, pages: res.pages });
         }
         setDiags(res.diagnostics);
         setStatus(`${Math.round(res.ms)} ms`);
@@ -162,52 +171,52 @@ export default function App() {
   }, [source, figures]);
 
   const openCanvas = useCallback(async () => {
-    const befintlig = figureAtCursor(viewRef.current);
-    if (befintlig) {
-      const namn = befintlig.split('/').pop();
-      const bytes = figures.get('figurer/' + namn);
+    const existing = figureAtCursor(viewRef.current);
+    if (existing) {
+      const name = existing.split('/').pop();
+      const bytes = figures.get(FIG_DIR + name);
       const strokes = bytes ? fromSvg(new TextDecoder().decode(bytes)) : null;
-      setDrawing({ namn, strokes: strokes ?? [], ny: false });
+      setDrawing({ name, strokes: strokes ?? [], isNew: false });
     } else {
-      setDrawing({ namn: api.nästaFigurnamn(sync.current.figurer), strokes: [], ny: true });
+      setDrawing({ name: api.nextFigureName(sync.current.figures), strokes: [], isNew: true });
     }
   }, [figures]);
 
-  // Dubbelklick i utfallet går till raden i koden. Står raden på en figur
-  // öppnas den för redigering i stället — markören står ju redan rätt.
+  // Double-clicking the output goes to the line in the code. If that line holds
+  // a figure it opens for editing instead — the cursor is already in place.
   //
-  // Upplösningen är blocknivå, inte per tecken: klicket landar på styckets
-  // början, inte på ordet man träffade. Det är medvetet, inte ett fel.
-  const påUtfall = (e) => {
+  // The resolution is block level, not per character: the click lands at the
+  // start of the block, not on the word it hit. That is deliberate, not a bug.
+  const onPreviewDoubleClick = (e) => {
     const svgEl = e.currentTarget.querySelector('svg');
-    const { markörer, sidor } = utfall;
-    if (!svgEl || !markörer.length || !sidor.length) return;
+    const { markers, pages } = layout;
+    if (!svgEl || !markers.length || !pages.length) return;
     const r = svgEl.getBoundingClientRect();
-    const höjd = svgEl.viewBox?.baseVal?.height;
-    if (!r.height || !höjd) return;
+    const height = svgEl.viewBox?.baseVal?.height;
+    if (!r.height || !height) return;
 
-    const { sida, y } = sidaVid(sidor, ((e.clientY - r.top) / r.height) * höjd);
-    const rad = radVid(markörer, sida, y);
-    if (rad === null) return;
+    const { page, y } = pageAt(pages, ((e.clientY - r.top) / r.height) * height);
+    const line = lineAt(markers, page, y);
+    if (line === null) return;
 
-    gåTillRad(viewRef.current, rad);
+    goToLine(viewRef.current, line);
     if (figureAtCursor(viewRef.current)) openCanvas();
   };
 
   const finishCanvas = async (svgText) => {
-    const { namn, ny } = drawing;
+    const { name, isNew } = drawing;
     try {
-      const r = await api.sparaFigur(namn, svgText);
-      sync.current.figurer = { ...sync.current.figurer, [namn]: r.mtime };
-      const nya = new Map(figuresRef.current).set('figurer/' + namn, api.tillBytes(svgText));
-      figuresRef.current = nya;
-      setFigures(nya);
-      // Fyllde vi bara på en figur som redan står i texten ska raden vara kvar
-      // som den är. Bara nya figurer infogas.
-      if (ny) insertAtCursor(viewRef.current, kod(namn));
+      const r = await api.saveFigure(name, svgText);
+      sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
+      const next = new Map(figuresRef.current).set(FIG_DIR + name, api.toBytes(svgText));
+      figuresRef.current = next;
+      setFigures(next);
+      // If we only added to a figure that is already in the text, the line
+      // stays as it is. Only new figures are inserted.
+      if (isNew) insertAtCursor(viewRef.current, figureCode(name));
       setDrawing(null);
     } catch (e) {
-      setStatus('figuren sparades inte: ' + (e.message || e));
+      setStatus('figure not saved: ' + (e.message || e));
     }
   };
 
@@ -222,131 +231,132 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawing, openCanvas]);
 
-  // Väntande är en figur vars filnamn inte förekommer i källan och aldrig har
-  // gjort det. Att radera en figurrad är ett medvetet val — figuren ska då inte
-  // komma tillbaka som "ny" och erbjuda sig att infogas igen. Kvar blir det
-  // knappen faktiskt är till för: en figur som aldrig kom in i texten, till
-  // exempel när den andra enhetens skrivning hann före och tog bort raden.
-  const väntande = useMemo(() => {
+  // Pending is a figure whose file name does not appear in the source and never
+  // has. Deleting a figure line is a deliberate choice — the figure must not
+  // come back as "new" and offer to insert itself again. What remains is what
+  // the button is actually for: a figure that never made it into the text, for
+  // instance when the other device's write got there first and removed the line.
+  const pending = useMemo(() => {
     if (source === null) return [];
-    const namn = [...figures.keys()].map((k) => k.slice('figurer/'.length));
-    for (const n of namn) if (source.includes(n)) settFörut.current.add(n);
-    return namn.filter((n) => !source.includes(n) && !settFörut.current.has(n)).sort();
+    const names = [...figures.keys()].map((k) => k.slice(FIG_DIR.length));
+    for (const n of names) if (source.includes(n)) seenBefore.current.add(n);
+    return names.filter((n) => !source.includes(n) && !seenBefore.current.has(n)).sort();
   }, [figures, source]);
 
-  // Alla på en gång, i namnordning, som en enda ångra-bar ändring.
-  const infogaVäntande = () => insertAtCursor(viewRef.current, väntande.map(kod).join(''));
+  // All at once, in name order, as a single undoable change.
+  const insertPending = () => insertAtCursor(viewRef.current, pending.map(figureCode).join(''));
 
-  // Ett dollartecken sätts in som par med markören emellan. Ett makro sätts in
-  // naket i matteläge och med # utanför, eftersom det är så Typst vill ha det.
-  const infogaSymbol = (t) => {
+  // A dollar sign is inserted as a pair with the cursor between them. A macro
+  // goes in bare in math mode and with a # outside it, since that is how Typst
+  // wants it.
+  const insertSymbol = (t) => {
     const view = viewRef.current;
     if (t === '$') return insertAtCursor(view, '$$', 1);
     if (t === '(') return insertAtCursor(view, '()', 1);
-    const eget = source !== null && makron(source).includes(t);
-    insertAtCursor(view, eget && !iMatte(view) ? '#' + t : t);
+    const own = source !== null && macros(source).includes(t);
+    insertAtCursor(view, own && !inMath(view) ? '#' + t : t);
   };
 
-  // Alla figurer som inte nämns i texten, även de du raderat raden för. Till
-  // skillnad från väntande, som bara är de som aldrig kommit in i texten.
-  const oanvända = useMemo(() => {
+  // Every figure not mentioned in the text, including the ones whose line you
+  // deleted. Unlike pending, which is only those that never entered the text.
+  const unused = useMemo(() => {
     if (source === null) return [];
     return [...figures.keys()]
-      .map((k) => k.slice('figurer/'.length))
-      .filter((namn) => !source.includes(namn))
+      .map((k) => k.slice(FIG_DIR.length))
+      .filter((name) => !source.includes(name))
       .sort();
   }, [figures, source]);
 
-  const radera = async (namn) => {
-    if (!window.confirm(`Radera ${namn}? Filen försvinner från disken.`)) return;
+  const remove = async (name) => {
+    if (!window.confirm(`Delete ${name}? The file disappears from disk.`)) return;
     try {
-      await api.raderaFigur(namn);
-      const kvar = new Map(figuresRef.current);
-      kvar.delete('figurer/' + namn);
-      figuresRef.current = kvar;
-      setFigures(kvar);
-      const { [namn]: _borta, ...rest } = sync.current.figurer;
-      sync.current.figurer = rest;
+      await api.deleteFigure(name);
+      const left = new Map(figuresRef.current);
+      left.delete(FIG_DIR + name);
+      figuresRef.current = left;
+      setFigures(left);
+      const { [name]: _gone, ...rest } = sync.current.figures;
+      sync.current.figures = rest;
     } catch (e) {
-      setStatus('kunde inte radera: ' + (e.message || e));
+      setStatus('could not delete: ' + (e.message || e));
     }
   };
 
-  // Innehållsförteckningen härleds ur källan, precis som väntande figurer.
-  // Ingen Typst inblandad: rubrikerna står i klartext i dokumentet.
-  const rubriker = useMemo(() => {
+  // The outline is derived from the source, just like pending figures. No Typst
+  // involved: the headings are in plain text in the document.
+  const headings = useMemo(() => {
     if (source === null) return [];
-    const ut = [];
+    const out = [];
     const re = /^(=+)[ \t]+(.+)$/gm;
     let m;
     while ((m = re.exec(source)) !== null) {
-      ut.push({ nivå: m[1].length, text: m[2].trim(), pos: m.index });
+      out.push({ level: m[1].length, text: m[2].trim(), pos: m.index });
     }
-    return ut;
+    return out;
   }, [source]);
 
-  if (source === null) return <div className="boot">Laddar…</div>;
+  if (source === null) return <div className="boot">Loading…</div>;
 
   const errors = diags.filter((d) => d.severity === 'error');
 
   return (
     <div className="app">
       <header>
-        <strong>Anteckningar</strong>
+        <strong>Notes</strong>
         <button onClick={openCanvas}>
-          {påFigur ? 'Redigera' : 'Rita'} <kbd>⌘D</kbd>
+          {onFigure ? 'Edit' : 'Draw'} <kbd>⌘D</kbd>
         </button>
-        {oanvända.length > 0 && (
-          <button className={visaStäd ? 'on' : ''} onClick={() => setVisaStäd((v) => !v)}>
-            Städa {oanvända.length}
+        {unused.length > 0 && (
+          <button className={showCleanup ? 'on' : ''} onClick={() => setShowCleanup((v) => !v)}>
+            Clean up {unused.length}
           </button>
         )}
-        {rubriker.length > 0 && (
-          <button className={visaInnehåll ? 'on' : ''} onClick={() => setVisaInnehåll((v) => !v)}>
-            Innehåll
+        {headings.length > 0 && (
+          <button className={showOutline ? 'on' : ''} onClick={() => setShowOutline((v) => !v)}>
+            Outline
           </button>
         )}
-        {väntande.length > 0 && (
-          <button className="primary" onClick={infogaVäntande}>
-            {väntande.length === 1 ? '1 ny figur' : `${väntande.length} nya figurer`}
+        {pending.length > 0 && (
+          <button className="primary" onClick={insertPending}>
+            {pending.length === 1 ? '1 new figure' : `${pending.length} new figures`}
           </button>
         )}
         <div className="panes">
-          {['kod', 'båda', 'utfall'].map((p) => (
+          {['code', 'both', 'output'].map((p) => (
             <button key={p} className={pane === p ? 'on' : ''} onClick={() => setPane(p)}>
               {p}
             </button>
           ))}
         </div>
-        <span className={'status' + (errors.length ? ' bad' : väntar ? ' väntar' : '')}>
-          {errors.length ? `${errors.length} fel` : väntar ? 'ändringar väntar' : status}
+        <span className={'status' + (errors.length ? ' bad' : waiting ? ' waiting' : '')}>
+          {errors.length ? `${errors.length} errors` : waiting ? 'changes waiting' : status}
         </span>
       </header>
 
       <main className={'pane-' + pane}>
         <section className="left">
-          {visaStäd && (
-            <ul className="stad">
-              <li className="rubrik">Nämns inte i texten</li>
-              {oanvända.map((namn) => (
-                <li key={namn}>
-                  <span>{namn}</span>
-                  <button onClick={() => radera(namn)}>Radera</button>
+          {showCleanup && (
+            <ul className="cleanup">
+              <li className="label">Not mentioned in the text</li>
+              {unused.map((name) => (
+                <li key={name}>
+                  <span>{name}</span>
+                  <button onClick={() => remove(name)}>Delete</button>
                 </li>
               ))}
             </ul>
           )}
-          {visaInnehåll && (
-            <ol className="innehall">
-              {rubriker.map((r) => (
-                <li key={r.pos} style={{ paddingLeft: (r.nivå - 1) * 14 }}>
+          {showOutline && (
+            <ol className="outline">
+              {headings.map((h) => (
+                <li key={h.pos} style={{ paddingLeft: (h.level - 1) * 14 }}>
                   <button
                     onClick={() => {
-                      gåTill(viewRef.current, r.pos);
-                      setVisaInnehåll(false);
+                      goTo(viewRef.current, h.pos);
+                      setShowOutline(false);
                     }}
                   >
-                    {r.text}
+                    {h.text}
                   </button>
                 </li>
               ))}
@@ -356,28 +366,28 @@ export default function App() {
             value={source}
             onChange={setSource}
             onDraw={openCanvas}
-            onMarkör={setPåFigur}
+            onCursor={setOnFigure}
             viewRef={viewRef}
           />
-          <Symbolrad source={source} onInfoga={infogaSymbol} />
+          <SymbolRow source={source} onInsert={insertSymbol} />
           {errors.length > 0 && (
             <ul className="diags">
               {errors.slice(0, 4).map((d, i) => (
                 <li key={i}>
-                  {d.line !== null ? `rad ${d.line + 1}: ` : ''}
+                  {d.line !== null ? `line ${d.line + 1}: ` : ''}
                   {d.message}
                 </li>
               ))}
             </ul>
           )}
         </section>
-        <section className="right" onDoubleClick={påUtfall} dangerouslySetInnerHTML={{ __html: svg }} />
+        <section className="right" onDoubleClick={onPreviewDoubleClick} dangerouslySetInnerHTML={{ __html: svg }} />
       </main>
 
       {drawing && (
         <Canvas
-          key={drawing.namn}
-          name={drawing.namn}
+          key={drawing.name}
+          name={drawing.name}
           initialStrokes={drawing.strokes}
           onDone={finishCanvas}
           onCancel={() => setDrawing(null)}

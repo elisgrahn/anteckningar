@@ -1,29 +1,30 @@
-// En figur är en SVG-fil som Typst kan rendera direkt, med den råa
-// scenen inbäddad i ett metadata-element. Filen är alltså både bild och
-// redigerbart dokument, vilket är det som gör att en figur kan fyllas på
-// senare i stället för att ritas om.
+// A figure is an SVG file Typst renders directly, with the raw scene embedded
+// in a comment at the end. The file is therefore both picture and editable
+// document, which is what lets a figure be added to later instead of redrawn.
 
 import { getStroke } from 'perfect-freehand';
 
+// Swedish on purpose: this literal is written into every figure on disk, so
+// renaming it would make existing figures unreadable.
 const SCENE_OPEN = '<!--scen:';
 const SCENE_CLOSE = '-->';
 
-// Ritade pixlar per punkt. Storleken på pappret följer alltså det man
-// faktiskt ritade: en liten skiss blir liten, en stor blir stor, och två
-// figurer ritade lika stort på skärmen blir lika stora i utfallet.
-const SKALA = 2.0;
+// Drawn pixels per point. Size on paper therefore follows what was actually
+// drawn: a small sketch stays small, a large one stays large, and two figures
+// drawn the same size on screen come out the same size.
+const SCALE = 2.0;
 
-// Bredden Canvas.jsx ritar med, som fallback när scenen är tom.
-const BREDD = 2.4;
+// The width Canvas.jsx draws with, as a fallback for an empty scene.
+const WIDTH = 2.4;
 
-// Marginalen följer linjebredden i stället för att vara konstant, så att en
-// tunn skiss inte får en ram tilltagen för ett tjockt streck.
-const marginal = (strokes) => 8 * Math.max(BREDD, ...strokes.map((s) => s.width || 0));
+// Padding follows the line width rather than being constant, so a thin sketch
+// does not get a frame sized for a thick stroke.
+const padding = (strokes) => 8 * Math.max(WIDTH, ...strokes.map((s) => s.width || 0));
 
-// perfect-freehands kontur är en sluten polygon (array av [x, y]). Standard-
-// mönstret för att göra den till ett d-attribut: M till första punkten, en Q
-// per segment genom nästa punkts mittpunkt (så hörnen mjukas av), stängt med
-// Z. Delas mellan Canvas.jsx (Path2D) och toSvg nedan.
+// perfect-freehand's outline is a closed polygon (array of [x, y]). The usual
+// pattern for turning it into a d attribute: M to the first point, one Q per
+// segment through the next point's midpoint (which softens the corners),
+// closed with Z. Shared by Canvas.jsx (Path2D) and toSvg below.
 export function pathFromOutline(outline) {
   if (!outline.length) return '';
   const [x0, y0] = outline[0];
@@ -36,10 +37,12 @@ export function pathFromOutline(outline) {
   return d + ' Z';
 }
 
-// thinning: 0 och simulatePressure: false stänger av bibliotekets gissning om
-// tryck — vi ritar med fast bredd (stroke.width), och utan dem blir strecket
-// ojämnt tjockt. getStroke hanterar en enda punkt (blir en prick) och två
-// punkter (blir en kapsel) på egen hand, så inget specialfall behövs här.
+// thinning: 0 and simulatePressure: false turn off the library's guess at pen
+// pressure — we draw at a fixed width (stroke.width), and without them the
+// stroke comes out unevenly thick. getStroke handles a single point (a dot)
+// and two points (a capsule) on its own, so no special case is needed here.
+// last: true draws the outline all the way to the final point; without it the
+// stroke ends a few pixels behind the pen.
 function pathFrom(points, width) {
   const outline = getStroke(points, { size: width, thinning: 0, simulatePressure: false, last: true });
   return pathFromOutline(outline);
@@ -61,7 +64,7 @@ function bounds(strokes) {
 
 export function toSvg(strokes) {
   const b = bounds(strokes);
-  const pad = marginal(strokes);
+  const pad = padding(strokes);
   const w = Math.round(b.x1 - b.x0 + pad * 2);
   const h = Math.round(b.y1 - b.y0 + pad * 2);
   const shift = (s) => ({
@@ -73,11 +76,11 @@ export function toSvg(strokes) {
     .map((s) => `<path d="${pathFrom(s.points, s.width)}" fill="${s.color}"/>`)
     .join('');
   const scene = JSON.stringify({ v: 1, strokes });
-  // viewBox i ritpixlar, storleken i punkter. Path-datan är alltså oförändrad
-  // och gamla figurer renderar som förut, men Typst får en fysisk storlek i
-  // stället för att figuren skalas till en fast andel av textbredden.
+  // viewBox in drawn pixels, size in points. The path data is therefore
+  // unchanged and old figures render as before, but Typst gets a physical size
+  // instead of scaling the figure to a fixed fraction of the text width.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${(w / SKALA).toFixed(1)}pt" height="${(h / SKALA).toFixed(1)}pt" viewBox="0 0 ${w} ${h}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${(w / SCALE).toFixed(1)}pt" height="${(h / SCALE).toFixed(1)}pt" viewBox="0 0 ${w} ${h}">` +
     paths +
     `${SCENE_OPEN}${scene.replace(/--/g, '- -')}${SCENE_CLOSE}` +
     `</svg>`
@@ -96,8 +99,8 @@ export function fromSvg(text) {
   }
 }
 
-// Kvadrerat avstånd från (x, y) till sträckan ab.
-function tillSträcka(x, y, a, b) {
+// Squared distance from (x, y) to the segment ab.
+function distanceToSegment(x, y, a, b) {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len2 = dx * dx + dy * dy;
@@ -107,18 +110,18 @@ function tillSträcka(x, y, a, b) {
   return (x - qx) ** 2 + (y - qy) ** 2;
 }
 
-// Träffar ett drag ett suddgummi vid (x, y)?
+// Does an eraser at (x, y) hit this stroke?
 //
-// Mot sträckorna, inte mot punkterna. En snäppt linje har bara två punkter,
-// start och slut, så en punktprövning gjorde hela mitten omöjlig att sudda.
-// Samma sak drabbar snabba frihandsdrag, där punkterna glesnar när pennan
-// rör sig fort.
+// Against the segments, not the points. A snapped line has only two points,
+// start and end, so testing points made its whole middle impossible to erase.
+// Fast freehand strokes have the same problem: the points thin out when the
+// pen moves quickly.
 export function hitStroke(stroke, x, y, r) {
   const p = stroke.points;
   if (!p.length) return false;
   if (p.length === 1) return (p[0].x - x) ** 2 + (p[0].y - y) ** 2 < r * r;
   for (let i = 1; i < p.length; i++) {
-    if (tillSträcka(x, y, p[i - 1], p[i]) < r * r) return true;
+    if (distanceToSegment(x, y, p[i - 1], p[i]) < r * r) return true;
   }
   return false;
 }
