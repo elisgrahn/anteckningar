@@ -54,7 +54,7 @@ native Rust-kompilator — ingetdera går att lyfta ur.
 `#metadata`-markörer i den kopia som kompileras, och `query` ger tillbaka sida
 och punktposition för varje markör. Positionerna hämtas ur samma kompilering som
 artefakten via `runWithWorld`; ett ensamt `query` misslyckas med "document is not
-compiled". Se `src/markorer.js`.
+compiled". Se `src/sourcemap.js`.
 
 Invariant 1 är verifierad, inte antagen: kopian med markörer ger ord för ord
 identisk layout och lika många sidor som originalet, mätt med riktiga `typst` på
