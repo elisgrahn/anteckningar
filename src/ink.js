@@ -3,6 +3,8 @@
 // redigerbart dokument, vilket är det som gör att en figur kan fyllas på
 // senare i stället för att ritas om.
 
+import { getStroke } from 'perfect-freehand';
+
 const SCENE_OPEN = '<!--scen:';
 const SCENE_CLOSE = '-->';
 
@@ -18,20 +20,29 @@ const BREDD = 2.4;
 // tunn skiss inte får en ram tilltagen för ett tjockt streck.
 const marginal = (strokes) => 8 * Math.max(BREDD, ...strokes.map((s) => s.width || 0));
 
-function pathFrom(points) {
-  if (points.length < 2) {
-    const p = points[0];
-    return `M ${p.x.toFixed(1)} ${p.y.toFixed(1)} l 0.1 0`;
+// perfect-freehands kontur är en sluten polygon (array av [x, y]). Standard-
+// mönstret för att göra den till ett d-attribut: M till första punkten, en Q
+// per segment genom nästa punkts mittpunkt (så hörnen mjukas av), stängt med
+// Z. Delas mellan Canvas.jsx (Path2D) och toSvg nedan.
+export function pathFromOutline(outline) {
+  if (!outline.length) return '';
+  const [x0, y0] = outline[0];
+  let d = `M ${x0.toFixed(1)} ${y0.toFixed(1)}`;
+  for (let i = 0; i < outline.length; i++) {
+    const [x, y] = outline[i];
+    const [nx, ny] = outline[(i + 1) % outline.length];
+    d += ` Q ${x.toFixed(1)} ${y.toFixed(1)} ${((x + nx) / 2).toFixed(1)} ${((y + ny) / 2).toFixed(1)}`;
   }
-  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
-  for (let i = 1; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    d += ` Q ${a.x.toFixed(1)} ${a.y.toFixed(1)} ${((a.x + b.x) / 2).toFixed(1)} ${((a.y + b.y) / 2).toFixed(1)}`;
-  }
-  const last = points[points.length - 1];
-  d += ` L ${last.x.toFixed(1)} ${last.y.toFixed(1)}`;
-  return d;
+  return d + ' Z';
+}
+
+// thinning: 0 och simulatePressure: false stänger av bibliotekets gissning om
+// tryck — vi ritar med fast bredd (stroke.width), och utan dem blir strecket
+// ojämnt tjockt. getStroke hanterar en enda punkt (blir en prick) och två
+// punkter (blir en kapsel) på egen hand, så inget specialfall behövs här.
+function pathFrom(points, width) {
+  const outline = getStroke(points, { size: width, thinning: 0, simulatePressure: false });
+  return pathFromOutline(outline);
 }
 
 function bounds(strokes) {
@@ -59,10 +70,7 @@ export function toSvg(strokes) {
   });
   const paths = strokes
     .map(shift)
-    .map(
-      (s) =>
-        `<path d="${pathFrom(s.points)}" fill="none" stroke="${s.color}" stroke-width="${s.width}" stroke-linecap="round" stroke-linejoin="round"/>`,
-    )
+    .map((s) => `<path d="${pathFrom(s.points, s.width)}" fill="${s.color}"/>`)
     .join('');
   const scene = JSON.stringify({ v: 1, strokes });
   // viewBox i ritpixlar, storleken i punkter. Path-datan är alltså oförändrad

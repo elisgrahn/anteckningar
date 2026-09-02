@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { toSvg, hitStroke } from './ink.js';
+import { getStroke } from 'perfect-freehand';
+import { toSvg, hitStroke, pathFromOutline } from './ink.js';
 
 const COLORS = ['#16233d', '#b03030', '#1c6b45'];
 
@@ -69,22 +70,16 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
         ctx.clearRect(0, 0, c.width / dpr, c.height / dpr);
         const all = st.current ? [...st.strokes, st.current] : st.strokes;
         for (const stroke of all) {
-          ctx.strokeStyle = stroke.color;
-          ctx.lineWidth = stroke.width;
-          ctx.beginPath();
-          const p = stroke.points;
-          if (p.length === 1) {
-            ctx.arc(p[0].x, p[0].y, stroke.width / 2, 0, Math.PI * 2);
-            ctx.fillStyle = stroke.color;
-            ctx.fill();
-          } else {
-            ctx.moveTo(p[0].x, p[0].y);
-            for (let i = 1; i < p.length - 1; i++) {
-              ctx.quadraticCurveTo(p[i].x, p[i].y, (p[i].x + p[i + 1].x) / 2, (p[i].y + p[i + 1].y) / 2);
-            }
-            ctx.lineTo(p[p.length - 1].x, p[p.length - 1].y);
-            ctx.stroke();
-          }
+          // thinning/simulatePressure avstängda: fast bredd (stroke.width),
+          // inget gissat tryck. getStroke klarar en enda punkt (blir en prick).
+          const outline = getStroke(stroke.points, {
+            size: stroke.width,
+            thinning: 0,
+            simulatePressure: false,
+          });
+          if (!outline.length) continue;
+          ctx.fillStyle = stroke.color;
+          ctx.fill(new Path2D(pathFromOutline(outline)));
         }
         st.dirty = false;
       }
