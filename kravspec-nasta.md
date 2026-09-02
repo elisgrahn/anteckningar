@@ -171,7 +171,7 @@ flygplansläget. Båda hamnar på servern utan att något behöver klickas, och
 
 - Fritt placerade figurer och ritande direkt på den renderade sidan. Egen
   kravspec, `kravspec-ritlage.md`. Uppgift 1 är byggd och mekanismen finns i
-  `src/markorer.js` — skriv om ritlägesspecen utifrån den i stället för spann
+  `src/sourcemap.js`. Ritlägesspecen är skriven utifrån den
 - Källa till utfall: förhandsvisningen följer med när man skriver. Markörerna
   vet redan var varje rad hamnade, så det är en liten uppgift ovanpå uppgift 1
 - Supabase. Byt ut de fyra funktionerna i `src/server.js` när behovet finns
