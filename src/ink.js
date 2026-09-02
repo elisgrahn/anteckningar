@@ -96,10 +96,29 @@ export function fromSvg(text) {
   }
 }
 
+// Kvadrerat avstånd från (x, y) till sträckan ab.
+function tillSträcka(x, y, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2)) : 0;
+  const qx = a.x + t * dx;
+  const qy = a.y + t * dy;
+  return (x - qx) ** 2 + (y - qy) ** 2;
+}
+
 // Träffar ett drag ett suddgummi vid (x, y)?
+//
+// Mot sträckorna, inte mot punkterna. En snäppt linje har bara två punkter,
+// start och slut, så en punktprövning gjorde hela mitten omöjlig att sudda.
+// Samma sak drabbar snabba frihandsdrag, där punkterna glesnar när pennan
+// rör sig fort.
 export function hitStroke(stroke, x, y, r) {
-  for (const p of stroke.points) {
-    if ((p.x - x) ** 2 + (p.y - y) ** 2 < r * r) return true;
+  const p = stroke.points;
+  if (!p.length) return false;
+  if (p.length === 1) return (p[0].x - x) ** 2 + (p[0].y - y) ** 2 < r * r;
+  for (let i = 1; i < p.length; i++) {
+    if (tillSträcka(x, y, p[i - 1], p[i]) < r * r) return true;
   }
   return false;
 }
