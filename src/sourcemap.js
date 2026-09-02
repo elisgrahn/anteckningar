@@ -16,6 +16,18 @@ export const SENTINEL = '#block()';
 // place content ahead of the page setup, and that shows in the output.
 const CONFIG_LINE = /^#(set|show|import|include|let)\b/;
 
+// A freely placed figure. It takes no room in the flow, so it is not a block a
+// figure can be anchored to — and it must not stand between a block and its
+// marker either. Both follow from the same line, and both matter:
+//
+// - With a marker of its own it becomes an anchor, and the next figure drawn
+//   beside it hangs off a figure rather than off the text. A figure dragged
+//   without moving would even re-anchor to itself.
+// - Standing directly above a block with no blank line between, it takes that
+//   block's marker away, since a marker is only placed after a blank line. The
+//   figure then anchors two blocks down and slides when the text reflows.
+const PLACE_LINE = /^#place\(/;
+
 /**
  * The copy that gets compiled: the same text, with `#__am(line)` on its own
  * line before each block start. Its own line is a requirement — `#__am(6)=
@@ -43,7 +55,8 @@ export function withMarkers(source) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    if (!inRaw && !inMath && parens <= 0 && previousBlank && trimmed !== '' && !CONFIG_LINE.test(trimmed)) {
+    const block = previousBlank && trimmed !== '' && !CONFIG_LINE.test(trimmed) && !PLACE_LINE.test(trimmed);
+    if (!inRaw && !inMath && parens <= 0 && block) {
       out.push(`#__am(${i})`);
       map.push(null);
     }
@@ -56,7 +69,8 @@ export function withMarkers(source) {
       parens += (line.match(/\(/g) || []).length - (line.match(/\)/g) || []).length;
       if (parens < 0) parens = 0;
     }
-    previousBlank = trimmed === '';
+    // A placed figure is out of the flow, so the block under it still starts one.
+    previousBlank = trimmed === '' || PLACE_LINE.test(trimmed);
   }
 
   // A marker past the last line, so that something drawn below the final block
