@@ -6,7 +6,17 @@
 const SCENE_OPEN = '<!--scen:';
 const SCENE_CLOSE = '-->';
 
-export const PAD = 24;
+// Ritade pixlar per punkt. Storleken på pappret följer alltså det man
+// faktiskt ritade: en liten skiss blir liten, en stor blir stor, och två
+// figurer ritade lika stort på skärmen blir lika stora i utfallet.
+const SKALA = 2.0;
+
+// Bredden Canvas.jsx ritar med, som fallback när scenen är tom.
+const BREDD = 2.4;
+
+// Marginalen följer linjebredden i stället för att vara konstant, så att en
+// tunn skiss inte får en ram tilltagen för ett tjockt streck.
+const marginal = (strokes) => 8 * Math.max(BREDD, ...strokes.map((s) => s.width || 0));
 
 function pathFrom(points) {
   if (points.length < 2) {
@@ -40,11 +50,12 @@ function bounds(strokes) {
 
 export function toSvg(strokes) {
   const b = bounds(strokes);
-  const w = b.x1 - b.x0 + PAD * 2;
-  const h = b.y1 - b.y0 + PAD * 2;
+  const pad = marginal(strokes);
+  const w = Math.round(b.x1 - b.x0 + pad * 2);
+  const h = Math.round(b.y1 - b.y0 + pad * 2);
   const shift = (s) => ({
     ...s,
-    points: s.points.map((p) => ({ x: p.x - b.x0 + PAD, y: p.y - b.y0 + PAD })),
+    points: s.points.map((p) => ({ x: p.x - b.x0 + pad, y: p.y - b.y0 + pad })),
   });
   const paths = strokes
     .map(shift)
@@ -54,8 +65,11 @@ export function toSvg(strokes) {
     )
     .join('');
   const scene = JSON.stringify({ v: 1, strokes });
+  // viewBox i ritpixlar, storleken i punkter. Path-datan är alltså oförändrad
+  // och gamla figurer renderar som förut, men Typst får en fysisk storlek i
+  // stället för att figuren skalas till en fast andel av textbredden.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(0)}" height="${h.toFixed(0)}" viewBox="0 0 ${w.toFixed(0)} ${h.toFixed(0)}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${(w / SKALA).toFixed(1)}pt" height="${(h / SKALA).toFixed(1)}pt" viewBox="0 0 ${w} ${h}">` +
     paths +
     `${SCENE_OPEN}${scene.replace(/--/g, '- -')}${SCENE_CLOSE}` +
     `</svg>`

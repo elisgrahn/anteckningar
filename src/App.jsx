@@ -149,7 +149,7 @@ export default function App() {
       figuresRef.current = ny;
       setFigures(ny);
       if (ny) {
-        insertAtCursor(viewRef.current, `\n#figure(\n  image("figurer/${namn}", width: 70%),\n  caption: [],\n)\n`);
+        insertAtCursor(viewRef.current, `\n#figure(\n  image("figurer/${namn}"),\n  caption: [],\n)\n`);
       }
       setDrawing(null);
     } catch (e) {
