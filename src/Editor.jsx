@@ -81,6 +81,14 @@ export function figureAtCursor(view) {
   return m ? m[1] : null;
 }
 
+/** Flyttar markören till en position i texten och rullar dit. */
+export function gåTill(view, pos) {
+  if (!view) return;
+  const p = Math.min(pos, view.state.doc.length);
+  view.dispatch({ selection: { anchor: p }, scrollIntoView: true });
+  view.focus();
+}
+
 /** Lägger in text vid markören som en enda ångra-bar ändring och behåller fokus. */
 export function insertAtCursor(view, text) {
   if (!view) return;

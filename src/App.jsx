@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { figureAtCursor, insertAtCursor, setDoc } from './Editor.jsx';
+import Editor, { figureAtCursor, gåTill, insertAtCursor, setDoc } from './Editor.jsx';
 import Canvas from './Canvas.jsx';
 import { compile } from './typst.js';
 import { fromSvg } from './ink.js';
@@ -25,6 +25,9 @@ export default function App() {
   // Figuren på markörens rad, om någon. Sätts av editorn vid varje flytt;
   // samma värde två gånger i rad ger ingen omritning.
   const [påFigur, setPåFigur] = useState(null);
+  // Den andra enheten har ändrat, men vi har egna osparade tecken.
+  const [väntar, setVäntar] = useState(false);
+  const [visaInnehåll, setVisaInnehåll] = useState(false);
 
   // Vad servern senast sa, och vad vi senast skickade dit. Skillnaden
   // mellan de två är hela synkmodellen.
@@ -61,6 +64,10 @@ export default function App() {
     async (första = false) => {
       const s = await api.hämtaTillstånd();
       const egnaÄndringar = !första && sync.current.sparad !== null && sync.current.sparad !== sourceRef.current;
+
+      // Blockeringen är rätt — dina osparade tecken ska inte skrivas över —
+      // men den var tyst, så den andra enhetens text fanns utan att synas.
+      setVäntar(s.mtime !== sync.current.mtime && (egnaÄndringar || sync.current.skriver));
 
       if (s.mtime !== sync.current.mtime && !egnaÄndringar && !sync.current.skriver) {
         sync.current.mtime = s.mtime;
@@ -200,6 +207,19 @@ export default function App() {
   // Alla på en gång, i namnordning, som en enda ångra-bar ändring.
   const infogaVäntande = () => insertAtCursor(viewRef.current, väntande.map(kod).join(''));
 
+  // Innehållsförteckningen härleds ur källan, precis som väntande figurer.
+  // Ingen Typst inblandad: rubrikerna står i klartext i dokumentet.
+  const rubriker = useMemo(() => {
+    if (source === null) return [];
+    const ut = [];
+    const re = /^(=+)[ \t]+(.+)$/gm;
+    let m;
+    while ((m = re.exec(source)) !== null) {
+      ut.push({ nivå: m[1].length, text: m[2].trim(), pos: m.index });
+    }
+    return ut;
+  }, [source]);
+
   if (source === null) return <div className="boot">Laddar…</div>;
 
   const errors = diags.filter((d) => d.severity === 'error');
@@ -211,6 +231,11 @@ export default function App() {
         <button onClick={openCanvas}>
           {påFigur ? 'Redigera' : 'Rita'} <kbd>⌘D</kbd>
         </button>
+        {rubriker.length > 0 && (
+          <button className={visaInnehåll ? 'on' : ''} onClick={() => setVisaInnehåll((v) => !v)}>
+            Innehåll
+          </button>
+        )}
         {väntande.length > 0 && (
           <button className="primary" onClick={infogaVäntande}>
             {väntande.length === 1 ? '1 ny figur' : `${väntande.length} nya figurer`}
@@ -223,13 +248,29 @@ export default function App() {
             </button>
           ))}
         </div>
-        <span className={'status' + (errors.length ? ' bad' : '')}>
-          {errors.length ? `${errors.length} fel` : status}
+        <span className={'status' + (errors.length ? ' bad' : väntar ? ' väntar' : '')}>
+          {errors.length ? `${errors.length} fel` : väntar ? 'ändringar väntar' : status}
         </span>
       </header>
 
       <main className={'pane-' + pane}>
         <section className="left">
+          {visaInnehåll && (
+            <ol className="innehall">
+              {rubriker.map((r) => (
+                <li key={r.pos} style={{ paddingLeft: (r.nivå - 1) * 14 }}>
+                  <button
+                    onClick={() => {
+                      gåTill(viewRef.current, r.pos);
+                      setVisaInnehåll(false);
+                    }}
+                  >
+                    {r.text}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
           <Editor
             value={source}
             onChange={setSource}

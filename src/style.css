@@ -40,6 +40,8 @@ header .panes { margin-left: auto; display: flex; gap: 4px; }
 
 .status { font-variant-numeric: tabular-nums; color: #6b7280; min-width: 5em; text-align: right; }
 .status.bad { color: #b03030; }
+/* Den andra enhetens ändringar finns men väntar på att du slutar skriva. */
+.status.väntar { color: #8a6d1f; min-width: 9em; }
 
 button {
   font: inherit;
@@ -128,3 +130,26 @@ main > section { min-width: 0; overflow: hidden; }
   0%, 60% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* Innehållsförteckningen, härledd ur rubrikerna i källan. Ligger över
+   editorn i stället för bredvid, eftersom iPaden inte har bredd att avvara. */
+.innehall {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  max-height: 40%;
+  overflow: auto;
+  border-bottom: 1px solid var(--lin);
+  background: #fafbfc;
+}
+.innehall li { margin: 0; }
+.innehall button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 5px 12px;
+}
+.innehall button:hover { background: #eef1f5; }
