@@ -53,6 +53,29 @@ Typst har **inga inbyggda typsnitt**: utan de sex filerna i `public/fonts` ger
 varje rad text `no font could be found`, och matten kräver särskilt
 NewCMMath-Regular.
 
+### Hopp mellan utfall och källa (`src/markorer.js`)
+
+Webbkompilatorn exporterar **inga spann** — `page_sources` är tom och `data-tid`
+är ett innehållsfingeravtryck för inkrementell diffning, inte en källposition.
+Dokumentet får därför berätta själv: `medMarkörer()` skjuter in osynliga
+`#metadata`-markörer i den kopia som kompileras, och `query` ger tillbaka sida
+och punktposition för varje markör.
+
+Tre saker som är lätta att gå på:
+
+- Positionerna måste hämtas ur **samma** kompilering som artefakten, via
+  `runWithWorld`. Ett ensamt `compiler.query()` misslyckas med `document is not
+  compiled`, eftersom det tar en färsk snapshot utan att kompilera.
+- Markören måste stå på **egen rad** och bara vid blockstart. `#__am(6)= Rubrik`
+  gör att `=` inte längre står först på raden, och rubriken blir vanlig text.
+  Aldrig inuti råblock, flerradig matte eller flerradiga anrop.
+- Kompilatorns felmeddelanden pekar på **kopian**. `medMarkörer` returnerar en
+  radkarta och `ursprungsrad()` översätter tillbaka, annars visar editorn fel rad.
+
+Filen på disk rörs aldrig (invariant 1). Att kopian ger identisk layout är mätt
+med riktiga `typst`, ord för ord, inte antaget. Upplösningen är blocknivå: ett
+klick landar på styckets början, inte på ordet.
+
 ### Figurformatet
 
 En figur är en vanlig SVG som Typst renderar direkt, med dragen sparade som

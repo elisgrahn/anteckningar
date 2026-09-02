@@ -6,9 +6,10 @@ omgången kopplar ihop utfallet med källan, och gör resten av verktyget duglig
 i en föreläsningssal.
 
 Att rita direkt på den renderade sidan ligger i `kravspec-ritlage.md` och byggs
-efter det här. Uppgift 1 är medvetet först: den kravspecen behöver kunna svara
-på exakt samma fråga — vilken del av källan hör den här pixeln till — så spiken
-betalar sig två gånger.
+efter det här. Uppgift 1 var medvetet först: den kravspecen behöver kunna svara
+på exakt samma fråga — vilken del av källan hör den här pixeln till — och spiken
+betalade sig två gånger. Markörerna ger dessutom *koordinater*, alltså var på
+sidan en rad hamnade, vilket är precis vad ritläget behöver.
 
 Arbetsordning som förut: en uppgift i taget, `npm run build` efter varje, en
 commit per uppgift. Uppgifterna är sorterade så att varje steg är användbart i
@@ -41,56 +42,28 @@ Samma som förra omgången, med noteringar om var den här omgången tar i dem.
 
 ---
 
-## 1. Dubbelklick i utfallet går till raden i koden
+## 1. Dubbelklick i utfallet går till raden i koden — BYGGD
 
-**Problem.** Preview är läsbar men död. Ser man ett fel får man leta upp stället
-i källan för hand.
+**Avgjord annorlunda än specen antog.** Spannvägen är utesluten: webbkompilatorn
+exporterar inga spann, `page_sources` är tom i varje kombination som går att nå,
+och `data-tid` är ett innehållsfingeravtryck för inkrementell diffning, inte en
+källposition. typst.app kompilerar på egna servrar och typst-preview bygger på en
+native Rust-kompilator — ingetdera går att lyfta ur.
 
-**Det här är utrett, inte gissat.** typst.ts har mekaniken, samma som typst.app
-och typst-preview använder:
+**Byggd med markörer i stället.** Appen skjuter in osynliga
+`#metadata`-markörer i den kopia som kompileras, och `query` ger tillbaka sida
+och punktposition för varje markör. Positionerna hämtas ur samma kompilering som
+artefakten via `runWithWorld`; ett ensamt `query` misslyckas med "document is not
+compiled". Se `src/markorer.js`.
 
-- `RenderSession.source_span(path: Uint32Array)` finns i wasm-bindningen, med
-  JS-omslaget `getSourceLoc(path)` i `renderer.mjs`.
-- Den renderade SVG:n bär `data-tid`-attribut. Elementvägen byggs genom att gå
-  uppåt från det klickade elementet och samla dem.
-- Haken: `renderSvg({ artifactContent })`, som `src/typst.js` använder i dag,
-  skapar en session internt via `runWithSession` och slänger den direkt.
-  Sessionen måste hållas vid liv för att gå att fråga.
+Invariant 1 är verifierad, inte antagen: kopian med markörer ger ord för ord
+identisk layout och lika många sidor som originalet, mätt med riktiga `typst` på
+det faktiska dokumentet.
 
-**Ändring.**
+## 2. Dubbelklick på en figur öppnar den för redigering — BYGGD
 
-- `src/typst.js` behåller en `RenderSession` mellan kompileringar i stället för
-  att skapa och slänga en per anrop, och exporterar en funktion som tar en
-  elementväg och ger tillbaka en källposition.
-- `App.jsx` lyssnar på `dblclick` i `.right`, går uppåt från `event.target` och
-  samlar `data-tid` till en `Uint32Array`, frågar, och flyttar markören med en
-  CodeMirror-dispatch plus `scrollIntoView`.
-
-**Osäkert, och det avgörs först.** Vad `source_span` returnerar för sträng är
-inte verifierat, och kompilatorn exponerar ingen egen span-upplösning —
-`get_ast`, `query` och `get_semantic_tokens` finns, men inget span till
-radnummer. Första steget är därför att logga vad den ger för ett känt dokument.
-Är det redan en position är resten rakt fram. Är det ett ogenomträngligt id får
-uppgiften avbrytas och rapporteras, för då vilar `kravspec-ritlage.md` på en
-förutsättning som inte håller och den bör skrivas om innan den påbörjas.
-
-**Invariant 6.** Sessionen får inte kunna hänga starten. Misslyckas den ska
-appen rendera utan positionsuppslagning och skriva orsaken i statusfältet.
-
-**Klart när.** Dubbelklick på en rubrik i utfallet flyttar markören till
-rubrikraden i editorn och rullar dit.
-
-## 2. Dubbelklick på en figur öppnar den för redigering
-
-**Ändring.** Samma mekanism som uppgift 1. Löser positionen ut till en rad som
-matchar `image("...svg")` öppnas ritläget med den figuren i stället för att
-markören bara flyttas. `figureAtCursor` i `Editor.jsx` gör redan matchningen och
-`openCanvas` i `App.jsx` gör redan öppnandet — det som behövs är att koppla ihop
-dem.
-
-**Klart när.** Dubbelklick på en ritad figur i utfallet öppnar ritläget med
-figurens drag laddade, och Klar ändrar den befintliga figuren utan att lägga in
-en ny rad.
+Samma mekanism. Landar hoppet på en rad som matchar `image("...svg")` öppnas
+ritläget i stället, eftersom markören då redan står rätt.
 
 ## 3. Kom ihåg pennfärgen
 
@@ -197,7 +170,10 @@ flygplansläget. Båda hamnar på servern utan att något behöver klickas, och
 ## Inte nu
 
 - Fritt placerade figurer och ritande direkt på den renderade sidan. Egen
-  kravspec, `kravspec-ritlage.md`. Bygg uppgift 1 först, den behövs där
+  kravspec, `kravspec-ritlage.md`. Uppgift 1 är byggd och mekanismen finns i
+  `src/markorer.js` — skriv om ritlägesspecen utifrån den i stället för spann
+- Källa till utfall: förhandsvisningen följer med när man skriver. Markörerna
+  vet redan var varje rad hamnade, så det är en liten uppgift ovanpå uppgift 1
 - Supabase. Byt ut de fyra funktionerna i `src/server.js` när behovet finns
 - Åtkomstskydd på API:t. Vem som helst på samma nät kan skriva
 - Flera dokument och filträd
