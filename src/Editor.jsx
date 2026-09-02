@@ -6,14 +6,14 @@ import { search, searchKeymap } from '@codemirror/search';
 
 // CodeMirror i stället för Monaco: Monaco är byggd för mus och tangentbord
 // och beter sig illa med pekskärm och iPad-tangentbord.
-export default function Editor({ value, onChange, onDraw, viewRef }) {
+export default function Editor({ value, onChange, onDraw, onMarkör, viewRef }) {
   const host = useRef(null);
 
   // Editorn skapas en gång, men props byter identitet vid varje render.
   // Utan den här refen stänger keymapen om första renderns callbacks och
   // ritar med en tom figurlista.
   const senaste = useRef(null);
-  senaste.current = { onChange, onDraw };
+  senaste.current = { onChange, onDraw, onMarkör };
 
   useEffect(() => {
     const view = new EditorView({
@@ -43,6 +43,8 @@ export default function Editor({ value, onChange, onDraw, viewRef }) {
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) senaste.current.onChange(u.state.doc.toString());
+            // Står markören på en figurrad byter knappen namn till Redigera.
+            if (u.docChanged || u.selectionSet) senaste.current.onMarkör(figureAtCursor(u.view));
           }),
           EditorView.theme({
             '&': { height: '100%', fontSize: '15px' },

@@ -8,39 +8,17 @@
 
 = Föreläsning 1
 
-Matte mellan dollartecken: $ integral_0^1 x^2 dif x = 1/3 $
-
-#image("figurer/f-11.svg")
-
-Cmd-D öppnar ritläget. Står markören på en rad som redan har en figur
-
-#image("figurer/f-05.svg")
-
-öppnas den för påfyllning i stället för att en ny skapas.
-
-#figure(
-  image("figurer/f-02.svg", width: 70%),
-  caption: [],
-)
-
-#figure(
-  image("figurer/f-03.svg", width: 70%),
-  caption: [],
-)
-
-kjerk
-
-#image("figurer/f-08.svg")
-
-#image("figurer/f-09.svg")
-
-#image("figurer/f-10.svg")
 
 
-#image("figurer/f-07.svg")
+#image("figurer/f-12.svg")
+#image("figurer/f-12.svg")
+#image("figurer/f-12.svg")
 
-#image("figurer/f-01.svg")
 
-#image("figurer/f-04.svg")
+yea
 
-#image("figurer/f-06.svg")
+#image("figurer/f-13.svg")
+#image("figurer/f-13.svg")
+
+
+

@@ -14,6 +14,12 @@ const LINJE_TOL = 0.08; // avvikelse från rät linje, andel av längden
 const SLUTEN_TOL = 0.2; // avstånd start–slut, andel av omkretsen
 const FORM_TOL = 0.12; // passning mot ellips respektive rektangel
 
+// Punkttäthet längs en rektangels kanter, glest på raksträckan och tätt i
+// hörnen. Se kommentaren i rektangel() för varför hörnen behöver det.
+const GLES = 12;
+const TÄT = 3;
+const HÖRNZON = 15;
+
 const avst = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function låda(points) {
@@ -91,8 +97,6 @@ function rektangel(l, points) {
   const fel = summa / points.length / diag;
   if (fel > FORM_TOL / 2) return null;
 
-  // Hörnen tas med exakt och kanterna punktas tätt, annars rundar
-  // konturberäkningen av hörnen till oigenkännlighet.
   const hörn = [
     { x: l.x0, y: l.y0 },
     { x: l.x1, y: l.y0 },
@@ -100,13 +104,19 @@ function rektangel(l, points) {
     { x: l.x0, y: l.y1 },
     { x: l.x0, y: l.y0 },
   ];
+  // Punkterna sitter tätt nära hörnen. perfect-freehand glättar indata med ett
+  // glidande medelvärde (streamline), och med jämnt glesa punkter kapas hörnet
+  // med drygt fem pixlar. Tätt inom hörnzonen hinner medelvärdet i kapp, och
+  // avvikelsen blir mindre än en linjebredd.
   const ut = [];
   for (let i = 1; i < hörn.length; i++) {
     const a = hörn[i - 1];
     const b = hörn[i];
-    const steg = Math.max(2, Math.round(avst(a, b) / 12));
-    for (let j = 0; j < steg; j++) {
-      ut.push({ x: a.x + ((b.x - a.x) * j) / steg, y: a.y + ((b.y - a.y) * j) / steg });
+    const len = avst(a, b);
+    let d = 0;
+    while (d < len) {
+      ut.push({ x: a.x + ((b.x - a.x) * d) / len, y: a.y + ((b.y - a.y) * d) / len });
+      d += d < HÖRNZON || d > len - HÖRNZON ? TÄT : GLES;
     }
   }
   ut.push({ ...hörn[0] });

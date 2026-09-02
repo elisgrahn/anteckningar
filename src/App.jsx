@@ -22,6 +22,9 @@ export default function App() {
   const [status, setStatus] = useState('startar');
   const [drawing, setDrawing] = useState(null);
   const [pane, setPane] = useState('båda');
+  // Figuren på markörens rad, om någon. Sätts av editorn vid varje flytt;
+  // samma värde två gånger i rad ger ingen omritning.
+  const [påFigur, setPåFigur] = useState(null);
 
   // Vad servern senast sa, och vad vi senast skickade dit. Skillnaden
   // mellan de två är hela synkmodellen.
@@ -147,14 +150,16 @@ export default function App() {
   }, [figures]);
 
   const finishCanvas = async (svgText) => {
-    const { namn } = drawing;
+    const { namn, ny } = drawing;
     try {
       const r = await api.sparaFigur(namn, svgText);
       sync.current.figurer = { ...sync.current.figurer, [namn]: r.mtime };
       const nya = new Map(figuresRef.current).set('figurer/' + namn, api.tillBytes(svgText));
       figuresRef.current = nya;
       setFigures(nya);
-      insertAtCursor(viewRef.current, kod(namn));
+      // Fyllde vi bara på en figur som redan står i texten ska raden vara kvar
+      // som den är. Bara nya figurer infogas.
+      if (ny) insertAtCursor(viewRef.current, kod(namn));
       setDrawing(null);
     } catch (e) {
       setStatus('figuren sparades inte: ' + (e.message || e));
@@ -196,7 +201,7 @@ export default function App() {
       <header>
         <strong>Anteckningar</strong>
         <button onClick={openCanvas}>
-          Rita <kbd>⌘D</kbd>
+          {påFigur ? 'Redigera' : 'Rita'} <kbd>⌘D</kbd>
         </button>
         {väntande.length > 0 && (
           <button className="primary" onClick={infogaVäntande}>
@@ -217,7 +222,13 @@ export default function App() {
 
       <main className={'pane-' + pane}>
         <section className="left">
-          <Editor value={source} onChange={setSource} onDraw={openCanvas} viewRef={viewRef} />
+          <Editor
+            value={source}
+            onChange={setSource}
+            onDraw={openCanvas}
+            onMarkör={setPåFigur}
+            viewRef={viewRef}
+          />
           {errors.length > 0 && (
             <ul className="diags">
               {errors.slice(0, 4).map((d, i) => (

@@ -41,7 +41,7 @@ export function pathFromOutline(outline) {
 // ojämnt tjockt. getStroke hanterar en enda punkt (blir en prick) och två
 // punkter (blir en kapsel) på egen hand, så inget specialfall behövs här.
 function pathFrom(points, width) {
-  const outline = getStroke(points, { size: width, thinning: 0, simulatePressure: false });
+  const outline = getStroke(points, { size: width, thinning: 0, simulatePressure: false, last: true });
   return pathFromOutline(outline);
 }
 

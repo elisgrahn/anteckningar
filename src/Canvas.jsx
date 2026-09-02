@@ -131,10 +131,13 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
         for (const stroke of all) {
           // thinning/simulatePressure avstängda: fast bredd (stroke.width),
           // inget gissat tryck. getStroke klarar en enda punkt (blir en prick).
+          // last: true drar konturen hela vägen fram till sista punkten —
+          // utan den slutar strecket ett par pixlar bakom pennan.
           const outline = getStroke(stroke.points, {
             size: stroke.width,
             thinning: 0,
             simulatePressure: false,
+            last: true,
           });
           if (!outline.length) continue;
           ctx.fillStyle = stroke.color;
