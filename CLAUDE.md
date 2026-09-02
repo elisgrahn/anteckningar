@@ -101,6 +101,11 @@ figur kan fyllas på i flera omgångar i stället för att ritas om. `toSvg` /
 
 ### Ritläget
 
+Beteendet — penna, handlovsskydd, snäppgest, ångra — ligger i `src/strokes.js`
+och delas av båda ytorna: helskärmsrutan (`Canvas.jsx`) och ritandet på den
+renderade sidan (`PageDraw.jsx`). Komponenterna äger bara sin yta och sin
+rendering. Lägg aldrig beteende i en av dem; det glider isär.
+
 `Canvas.jsx` håller drag i en ref och ritar i en `requestAnimationFrame`-loop
 med en `dirty`-flagga — React-state används bara för verktyg, färg och antal,
 aldrig för punkter under ett drag. Handlovsskydd: fingret får rita bara om
@@ -134,6 +139,26 @@ Storleken kommer från figuren själv: `toSvg` skriver `width`/`height` i punkte
 ritpixlar. Ingen `width:` i den infogade koden — en liten skiss blir liten på
 pappret. A4:s textbredd är 453 pt, så en figur bredare än ~907 ritade pixlar
 spiller ut i marginalen; justera `SCALE` i `src/ink.js` om det blir ett problem.
+
+### Rita på utfallet (`src/PageDraw.jsx`)
+
+Pennan ritar, fingret rullar. Fingerrullningen görs för hand, eftersom
+`touch-action` inte kan skilja ett penndrag från ett fingerdrag. Musen ritar,
+för en laptop har ingen penna. Svg:n har `pointer-events: none` — utfallet är en
+bakgrund, inte en text man markerar i.
+
+Punkterna hålls i **ritade pixlar** (sidpunkter × `SCALE`), inte skärmpixlar, så
+figuren blir lika stor oavsett skalning och snäpptröskorna betyder samma sak på
+båda ytorna.
+
+En fritt placerad figur ankras till sitt block och skrivs som
+`#place(dx:, dy:, image(...))` på raden **före** blocket. Före, inte efter: då är
+place-radens flödesposition densamma som blockets, alltså exakt den markör vi
+redan har — annars vet man inte var raden hamnar förrän efter omkompileringen.
+`#place` påverkar inte textflödet, mätt ord för ord.
+
+Ett snabbt tryck som inte rörde sig räknas som klick, inte märke, annars lämnar
+dubbelklicket som hoppar till källan två prickar efter sig.
 
 ### Var figuren hamnar
 
