@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Editor, { figureAtCursor, goTo, goToLine, inMath, insertAtCursor, setDoc, upsertLine } from './Editor.jsx';
-import { lineAt, markerAt, pageAt } from './sourcemap.js';
+import { lineAt, markerAt, nextMarker, pageAt } from './sourcemap.js';
 import SymbolRow, { macros } from './SymbolRow.jsx';
 import Canvas from './Canvas.jsx';
 import PageDraw from './PageDraw.jsx';
@@ -208,17 +208,21 @@ export default function App() {
       const spot = pageAt(layout.pages, inkTopLeft(strokes).y / SCALE);
       const origin = figureOrigin(strokes);
 
-      // The line is written immediately before the block it belongs to, glued
-      // to it. Writing it *after* the block reads better in the source, and was
-      // tried, but it does not survive editing: an isolated #place block has no
-      // stable flow position of its own — it depends on what follows it, so
-      // adding a paragraph after the figure pushed the figure down onto it.
+      // The block the figure belongs to, and the one after it. The line goes
+      // before the latter, which puts it after the former — a figure drawn
+      // under a heading belongs under it in the source too, or copying a
+      // heading with its contents would leave the figure behind.
       //
-      // Before its own block is the only placement that is stable under every
-      // edit, measured: text added after leaves it alone, text added before
-      // moves it by exactly that much, and its own paragraph growing does not
-      // move it at all.
-      const flow = onPage.current.flow ?? markerAt(layout.markers, spot.page, spot.y) ?? layout.markers[0];
+      // This is stable only because withMarkers closes the document with a
+      // sentinel block. Without it, a figure written after the final paragraph
+      // sat one line too high and jumped as soon as anything was typed after
+      // it. Measured with the sentinel: 109.49 both before and after.
+      //
+      // Across a page break the two anchors differ for real, and there the
+      // block itself is the only one that keeps the figure on its own page.
+      const own = markerAt(layout.markers, spot.page, spot.y) ?? layout.markers[0];
+      const after = nextMarker(layout.markers, own);
+      const flow = onPage.current.flow ?? (after && after.page === spot.page ? after : own);
       if (!flow) return; // nothing to anchor to; the figure is saved anyway
       onPage.current.flow = flow;
 

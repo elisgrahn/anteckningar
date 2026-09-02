@@ -10,6 +10,8 @@
 
 export const PREAMBLE = '#let __am(n) = context [#metadata((line: n, pos: here().position()))<am>]';
 
+export const SENTINEL = '#block()';
+
 // Lines that configure the document as a whole. A marker before #set page can
 // place content ahead of the page setup, and that shows in the output.
 const CONFIG_LINE = /^#(set|show|import|include|let)\b/;
@@ -62,6 +64,17 @@ export function withMarkers(source) {
   out.push(`#__am(${lines.length})`);
   map.push(null);
 
+  // An empty block to close the document with.
+  //
+  // Without it the last block in the flow has no successor, and an invisible
+  // block there reports a position one line short of what it gets as soon as
+  // anything follows — which is exactly what made a figure written after the
+  // final paragraph jump down onto the next thing typed. With it, the end of
+  // the document behaves like the middle of it. Measured not to change the
+  // layout: same word positions, same page count.
+  out.push(SENTINEL);
+  map.push(null);
+
   return { text: out.join('\n'), map };
 }
 
@@ -107,4 +120,21 @@ export function markerAt(markers, page, y) {
 
 export function lineAt(markers, page, y) {
   return markerAt(markers, page, y)?.line ?? null;
+}
+
+/**
+ * The marker for the block after this one.
+ *
+ * A figure's line is written immediately before its flow anchor, so anchoring
+ * to the *next* block is what puts the line after the block the figure belongs
+ * to — where it has to be if a heading and everything under it is to be copied
+ * in one piece.
+ *
+ * That only holds because of the sentinel: an invisible block reports the same
+ * position as the block that follows it, but only when one does. The last
+ * marker in the list is the one before the sentinel, so there is always a next.
+ */
+export function nextMarker(markers, marker) {
+  if (!marker) return null;
+  return markers.find((m) => m.line > marker.line) ?? null;
 }

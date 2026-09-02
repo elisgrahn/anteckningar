@@ -148,13 +148,14 @@ export function upsertLine(view, match, text, beforeLine) {
     return;
   }
 
-  // Glued to the block below it, with a blank line above. No blank line
-  // between: the two have to stay one unit, because that is what gives the
-  // figure a flow position that survives editing.
+  // A block of its own, blank lines on both sides: the block that follows keeps
+  // its own marker, the one before does not swallow it as a continuation, and
+  // the figure reads as belonging to what comes before it.
   const n = Math.max(beforeLine + 1, 1);
   const at = doc.line(n);
   const lead = n > 1 && doc.line(n - 1).text.trim() !== '' ? '\n' : '';
-  view.dispatch({ changes: { from: at.from, insert: lead + text + '\n' } });
+  const trail = at.text.trim() === '' ? '\n' : '\n\n';
+  view.dispatch({ changes: { from: at.from, insert: lead + text + trail } });
 }
 
 /** Is the cursor between two dollar signs? Decides whether a macro is inserted
