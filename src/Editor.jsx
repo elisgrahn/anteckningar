@@ -139,8 +139,23 @@ export function upsertLine(view, match, text, beforeLine) {
       return;
     }
   }
-  const n = Math.min(Math.max(beforeLine + 1, 1), doc.lines);
-  view.dispatch({ changes: { from: doc.line(n).from, insert: text + '\n' } });
+  // Past the last line — a figure drawn below everything. Clamping to the last
+  // line would put it above the final paragraph instead of after it.
+  if (beforeLine + 1 > doc.lines) {
+    const tail = doc.sliceString(Math.max(0, doc.length - 2));
+    const lead = tail.endsWith('\n\n') ? '' : tail.endsWith('\n') ? '\n' : '\n\n';
+    view.dispatch({ changes: { from: doc.length, insert: lead + text + '\n' } });
+    return;
+  }
+
+  // Blank lines on both sides, so the line becomes a block of its own: the
+  // block that follows keeps its own marker, the one before does not swallow it
+  // as a continuation, and the figure reads as belonging to what comes before.
+  const n = Math.max(beforeLine + 1, 1);
+  const at = doc.line(n);
+  const before = n > 1 && doc.line(n - 1).text.trim() !== '' ? '\n' : '';
+  const after = at.text.trim() === '' ? '\n' : '\n\n';
+  view.dispatch({ changes: { from: at.from, insert: before + text + after } });
 }
 
 /** Is the cursor between two dollar signs? Decides whether a macro is inserted

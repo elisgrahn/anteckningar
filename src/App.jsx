@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Editor, { figureAtCursor, goTo, goToLine, inMath, insertAtCursor, setDoc, upsertLine } from './Editor.jsx';
-import { lineAt, markerAt, pageAt } from './sourcemap.js';
+import { lineAt, markerAt, nextMarker, pageAt } from './sourcemap.js';
 import SymbolRow, { macros } from './SymbolRow.jsx';
 import Canvas from './Canvas.jsx';
 import PageDraw from './PageDraw.jsx';
 import { compile } from './typst.js';
-import { figureOrigin, fromSvg, toSvg, SCALE } from './ink.js';
+import { figureOrigin, fromSvg, inkTopLeft, toSvg, SCALE } from './ink.js';
 import * as api from './server.js';
 
 const POLL_MS = 1500;
@@ -201,17 +201,32 @@ export default function App() {
   const onPage = useRef(null);
 
   const placeFigure = useCallback(
-    async (name, strokes, page) => {
+    async (name, strokes) => {
+      // Which block the figure belongs to is decided by the ink, not by the
+      // saved figure's padded corner — the padding is taller than a line of
+      // text, so an underline would otherwise belong to the paragraph above.
+      const spot = pageAt(layout.pages, inkTopLeft(strokes).y / SCALE);
       const origin = figureOrigin(strokes);
-      const spot = pageAt(layout.pages, origin.y / SCALE);
-      const anchor = onPage.current.anchor ?? markerAt(layout.markers, spot.page, spot.y) ?? layout.markers[0];
-      if (!anchor) return; // nothing to anchor to; the figure is saved anyway
-      onPage.current.anchor = anchor;
 
-      const dx = origin.x / SCALE - anchor.x;
-      const dy = spot.y - anchor.y;
+      // The block the figure belongs to, and the one after it. The line is
+      // written before the latter, which puts it after the former — a figure
+      // drawn under a heading has to sit under it in the source too, or copying
+      // a heading and its contents would leave the figure behind.
+      //
+      // The two are the same position to Typst, so the offsets stay exact. Only
+      // across a page break do they differ, and there the block itself is the
+      // only anchor that keeps the figure on its own page.
+      const own = markerAt(layout.markers, spot.page, spot.y) ?? layout.markers[0];
+      const after = nextMarker(layout.markers, own);
+      const flow = onPage.current.flow ?? (after && after.page === spot.page ? after : own);
+      if (!flow) return; // nothing to anchor to; the figure is saved anyway
+      onPage.current.flow = flow;
+
+      const above = layout.pages.slice(0, flow.page - 1).reduce((a, p) => a + p.height, 0);
+      const dx = origin.x / SCALE - flow.x;
+      const dy = origin.y / SCALE - (above + flow.y);
       const line = `#place(dx: ${dx.toFixed(1)}pt, dy: ${dy.toFixed(1)}pt, image("${FIG_DIR}${name}"))`;
-      upsertLine(viewRef.current, `image("${FIG_DIR}${name}")`, line, anchor.line);
+      upsertLine(viewRef.current, `image("${FIG_DIR}${name}")`, line, flow.line);
     },
     [layout],
   );
@@ -226,7 +241,7 @@ export default function App() {
       return;
     }
     if (!onPage.current) {
-      onPage.current = { name: api.nextFigureName(sync.current.figures), anchor: null };
+      onPage.current = { name: api.nextFigureName(sync.current.figures), flow: null };
     }
     const { name } = onPage.current;
     onPage.current.timer = setTimeout(async () => {
@@ -237,7 +252,7 @@ export default function App() {
         const next = new Map(figuresRef.current).set(FIG_DIR + name, api.toBytes(svgText));
         figuresRef.current = next;
         setFigures(next);
-        await placeFigure(name, data.strokes, data.page);
+        await placeFigure(name, data.strokes);
       } catch (e) {
         setStatus('figure not saved: ' + (e.message || e));
       }

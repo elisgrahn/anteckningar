@@ -69,6 +69,19 @@ function bounds(strokes) {
 }
 
 /**
+ * The top left of the ink itself, without the padding.
+ *
+ * Which block a figure belongs to has to be decided from here and not from
+ * figureOrigin: the padding is 8 line widths, more than a line of text is tall,
+ * so an underline drawn just below a word would otherwise be judged to belong
+ * to the paragraph above it.
+ */
+export function inkTopLeft(strokes) {
+  const b = bounds(strokes);
+  return { x: b.x0, y: b.y0 };
+}
+
+/**
  * Where the saved figure's top left corner sits, in the coordinates the strokes
  * were drawn in. toSvg shifts everything so that this corner becomes (0, 0), so
  * a caller that needs to place the figure on a page has to know it.

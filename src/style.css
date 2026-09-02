@@ -70,8 +70,8 @@ main {
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
-main.pane-kod { grid-template-columns: 1fr 0; }
-main.pane-utfall { grid-template-columns: 0 1fr; }
+main.pane-code { grid-template-columns: 1fr 0; }
+main.pane-output { grid-template-columns: 0 1fr; }
 
 main > section { min-width: 0; overflow: hidden; }
 
