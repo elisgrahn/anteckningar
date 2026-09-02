@@ -1,0 +1,118 @@
+:root {
+  --lin: #cfd4dc;
+  --bg: #eef0f3;
+  --ink: #16233d;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overscroll-behavior: none;
+}
+
+.boot { display: grid; place-items: center; height: 100dvh; color: #6b7280; }
+
+/* 100dvh, inte 100vh: på iOS krymper det synliga fönstret när
+   adressfältet visas, och vh räknar på det största läget. */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--lin);
+  background: #fff;
+  padding-top: max(8px, env(safe-area-inset-top));
+}
+
+header .panes { margin-left: auto; display: flex; gap: 4px; }
+
+.status { font-variant-numeric: tabular-nums; color: #6b7280; min-width: 5em; text-align: right; }
+.status.bad { color: #b03030; }
+
+button {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--lin);
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.4; }
+button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+button.swatch { width: 26px; height: 26px; padding: 0; border-radius: 50%; }
+button.swatch.on { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+kbd {
+  font: 11px/1 ui-monospace, monospace;
+  opacity: 0.55;
+  margin-left: 4px;
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+main.pane-kod { grid-template-columns: 1fr 0; }
+main.pane-utfall { grid-template-columns: 0 1fr; }
+
+main > section { min-width: 0; overflow: hidden; }
+
+.left { display: flex; flex-direction: column; border-right: 1px solid var(--lin); background: #fff; }
+.editor { flex: 1; min-height: 0; }
+
+.diags {
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+  border-top: 1px solid var(--lin);
+  background: #fdf2f2;
+  color: #8a2222;
+  font-size: 13px;
+  max-height: 22%;
+  overflow: auto;
+}
+
+.right { overflow: auto; padding: 16px; -webkit-overflow-scrolling: touch; }
+.right svg { max-width: 100%; height: auto; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.overlay-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--lin);
+}
+.overlay-bar .tools { display: flex; align-items: center; gap: 6px; }
+.overlay-bar .right { display: flex; gap: 6px; margin-left: auto; padding: 0; overflow: visible; }
+
+.overlay-canvas { flex: 1; min-height: 0; position: relative; }
+.overlay-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
