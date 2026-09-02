@@ -212,3 +212,45 @@ main > section { min-width: 0; overflow: hidden; }
   width: max-content;
   margin: 4px;
 }
+
+/* A figure already on the page, selected by a tap. The border and the button
+   are chrome over the output: they take no pointer except the button itself,
+   or the canvas below would stop seeing the pen. */
+.placed-box {
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid #2563eb;
+  border-radius: 3px;
+  background: rgba(37, 99, 235, 0.06);
+  z-index: 1;
+}
+.placed-box img { width: 100%; height: 100%; opacity: 0.5; }
+
+/* Where in the text the figure hangs. Dashed, across the page, and it follows
+   along while the figure is dragged — that is the whole point of showing it. */
+.anchor-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  border-top: 1.5px dashed #2563eb;
+  opacity: 0.65;
+  z-index: 1;
+}
+
+.placed-x {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #2563eb;
+  border-radius: 50%;
+  background: #fff;
+  color: #2563eb;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.placed-x:active { background: #2563eb; color: #fff; }

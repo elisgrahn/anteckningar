@@ -86,6 +86,12 @@ Tre saker som är lätta att gå på:
   Aldrig inuti råblock, flerradig matte eller flerradiga anrop.
 - Kompilatorns felmeddelanden pekar på **kopian**. `withMarkers` returnerar en
   radkarta och `originalLine()` översätter tillbaka, annars visar editorn fel rad.
+- En `#place`-rad får **ingen markör**, och räknas som blank för raden under.
+  Annars faller två fel ut: figuren blir ett eget ankare, så nästa figur som
+  ritas bredvid hänger på en figur i stället för på texten — och en figur som
+  dras utan att flytta sig ankrar till sig själv. Och står raden direkt ovanför
+  ett block stjäl den blockets markör, eftersom en markör bara sätts efter en
+  blank rad, varpå figuren ankrar två block ned.
 
 Filen på disk rörs aldrig (invariant 1). Att kopian ger identisk layout är mätt
 med riktiga `typst`, ord för ord, inte antaget. Upplösningen är blocknivå: ett
@@ -184,6 +190,42 @@ något ritat under allt annat.
 
 Ett snabbt tryck som inte rörde sig räknas som klick, inte märke, annars lämnar
 dubbelklicket som hoppar till källan två prickar efter sig.
+
+### Röra en placerad figur (`src/placed.js`)
+
+En placerad figurs rektangel är ankarets position + `dx`/`dy` + storleken som
+står i figurens egen `width`/`height`. Ingen extra query och ingen state: den
+härleds ur källan och senaste kompileringens markörer, som innehållsförteckningen
+och de väntande figurerna.
+
+Ett **tryck markerar** — solid ram, streckat ankarstreck, rund X-knapp. Ett
+**drag innanför ramen flyttar**, dubbelklick öppnar för påfyllning, X tar bort
+raden. Markering är ett läge man går in i med flit, och det är den regeln som
+gör att en omarkerad figur fortfarande går att rita ovanpå; att fylla på en
+skiss är just det. Esc avmarkerar.
+
+Det streckade strecket visar var figuren *är* förankrad, och under ett drag var
+den *skulle* förankras om man släppte nu. Ankringen är modellens enda osynliga
+del och den syns först nästa gång texten flödar om — därför visas den.
+
+Två funktioner måste ge samma svar, annars byter en figur ankare bara av att bli
+vidrörd: `anchorFor` (vilket block ett bläckhörn hör till) används både när
+figuren ritas och när den dras, och `anchorOf` (vilket block en befintlig rad
+hänger på) läser tillbaka det. Mätt med riktiga `typst` på en fixtur — en figur
+vid varje block, en under allt, och en flytt: rektangeln läses tillbaka på samma
+punkt som pennan lämnade den, och ett drag ger samma ankare som raden har.
+
+En flytt som byter ankarblock **flyttar raden i källan** (`moveLine` i
+`Editor.jsx`), inte bara talen — annars pekar förskjutningen från fel block så
+fort texten flödar om. Raden tas bort med den blanka rad den annars lämnar efter
+sig, och båda ändringarna går ut i en dispatch, alltså ett ångra-steg.
+
+Radering tar bara bort raden; SVG:n ligger kvar och dyker upp i städlistan. Det
+är därför den listan finns.
+
+Fylls en placerad figur på så att bläcket växer uppåt eller åt vänster flyttar
+sig figurens hörn, eftersom `toSvg` räknar om ramen. `dx`/`dy` justeras med samma
+belopp när ritläget stängs, annars glider figuren undan lika mycket som den växte.
 
 ### Var figuren hamnar
 

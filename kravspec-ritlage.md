@@ -89,38 +89,36 @@ rättas på ett ställe av två.
 sitter kvar på samma ställe efter omkompilering. Lägg till en mening ovanför —
 pilen följer med sitt stycke. `typst compile document/main.typ` går igenom.
 
-## 2. Öppna en placerad figur för påfyllning
+## 2. Öppna en placerad figur för påfyllning — BYGGD
 
-**Ändring.** Dubbelklick på en placerad figur öppnar den för påfyllning, som
-uppgift 2 i förra omgången gör för figurer i löptexten.
+Dubbelklick på en placerad figur öppnar den för påfyllning. Rektangeln räknas ut
+som specen sa: ankarets position plus `dx`/`dy` plus figurens egen storlek ur
+SVG:ns `width`/`height`. Ingen ny query. `src/placed.js`.
 
-Figurens rektangel på sidan räknas ut som ankarets position plus `dx`/`dy` plus
-figurens egen storlek, som står i SVG:ns `width`/`height` i punkter. Ingen ny
-query behövs.
+**Ett tillägg specen inte förutsåg.** Växer bläcket uppåt eller åt vänster under
+påfyllningen flyttar sig figurens hörn, eftersom `toSvg` räknar om ramen. Då
+justeras `dx`/`dy` med samma belopp när ritläget stängs — annars glider figuren
+undan lika mycket som den växte.
 
-**Klart när.** Dubbelklick på en ritad pil öppnar ritläget med pilens drag
-laddade, och Klar ändrar den befintliga figuren utan att lägga till en ny rad.
+## 3. Flytta en placerad figur — BYGGD
 
-## 3. Flytta en placerad figur
+Ett tryck markerar figuren, ett drag innanför ramen flyttar den, och släppet
+skriver nya `dx`/`dy`. Byter flytten ankarblock flyttas raden i källan
+(`moveLine`), inte bara talen; raden och den blanka rad den annars lämnar efter
+sig går ut i en enda dispatch, alltså ett ångra-steg.
 
-**Problem.** Ritar man fel hamnar figuren fel, och enda utvägen är att redigera
-`dx`/`dy` för hand i koden.
+**Markering blev ett eget läge**, vilket specen inte tog ställning till. Ett
+tryck markerar, ett drag ritar som förut — annars hade en penna som nuddar en
+figur slutat kunna rita ovanpå den, och påfyllning är just det.
 
-**Ändring.** Dra en placerad figur med pennan för att flytta den. Släpp
-uppdaterar `dx`/`dy` på dess rad, som en enda ångra-bar ändring.
+Under flytten visar ett streckat streck var figuren skulle förankras om man
+släppte nu. Ankringen är modellens enda osynliga del, och den är det som gör
+skillnad först nästa gång texten flödar om.
 
-Byter man ankarblock under flytten ska raden flyttas i källan, inte bara få nya
-tal — annars pekar förskjutningen från fel ställe så fort texten flödar om.
+## 4. Radera en placerad figur — BYGGD
 
-**Klart när.** Dra en figur en bit, ladda om sidan, och den ligger kvar där du
-släppte den. Cmd-Z i editorn tar tillbaka flytten.
-
-## 4. Radera en placerad figur
-
-**Ändring.** Markera en placerad figur och radera den: raden tas bort ur källan.
-SVG-filen blir kvar på disk och dyker upp i städlistan, som redan finns.
-
-**Klart när.** En felritad figur går att ta bort utan att leta upp raden.
+En rund X-knapp i figurens övre högra hörn när den är markerad. Raden tas bort ur
+källan, SVG:n blir kvar på disk och dyker upp i städlistan.
 
 ---
 
@@ -136,6 +134,20 @@ SVG-filen blir kvar på disk och dyker upp i städlistan, som redan finns.
   som korsar en sidbrytning får det bli två figurer.
 - Offline. Egen uppgift i `kravspec-nasta.md`, och den är fortfarande den
   nyttigaste av allihop.
+
+## Rättat på vägen: markörer för `#place`-rader
+
+Uppgift 1 lämnade efter sig ett fel som inte syntes förrän figurerna gick att
+röra. En `#place`-rad fick en egen markör, och då blir figuren ett ankare: nästa
+figur som ritas bredvid hänger på en figur i stället för på texten, och en figur
+som dras utan att egentligen flytta sig ankrar till sig själv. Stod raden direkt
+ovanför ett block stal den dessutom blockets markör, eftersom en markör bara
+sätts efter en blank rad — figuren ankrade två block ned.
+
+`withMarkers` sätter därför ingen markör för en `#place`-rad, och räknar raden
+som blank för raden under. Mätt med riktiga `typst` på det faktiska dokumentet:
+kopian med markörer ger byte-identiska sidbilder mot filen på disk, sida för
+sida. (Med avslutaren skiljer sista sidan, precis som den kända kostnaden säger.)
 
 ## Känd begränsning som ärvs
 

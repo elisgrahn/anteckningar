@@ -120,6 +120,45 @@ export function insertAtCursor(view, text, back = 0) {
   view.focus();
 }
 
+/** The line number, one-based, holding `match` — or 0 if the text has none. */
+function findLine(doc, match) {
+  for (let n = 1; n <= doc.lines; n++) if (doc.line(n).text.includes(match)) return n;
+  return 0;
+}
+
+/** The change that writes `text` as a block of its own before line `beforeLine`. */
+function insertion(doc, beforeLine, text) {
+  // Past the last line — a figure drawn below everything. Clamping to the last
+  // line would put it above the final paragraph instead of after it.
+  if (beforeLine + 1 > doc.lines) {
+    const tail = doc.sliceString(Math.max(0, doc.length - 2));
+    const lead = tail.endsWith('\n\n') ? '' : tail.endsWith('\n') ? '\n' : '\n\n';
+    return { from: doc.length, to: doc.length, insert: lead + text + '\n' };
+  }
+
+  // Blank lines on both sides: the block that follows keeps its own marker, the
+  // one before does not swallow it as a continuation, and the figure reads as
+  // belonging to what comes before it.
+  const n = Math.max(beforeLine + 1, 1);
+  const at = doc.line(n);
+  const lead = n > 1 && doc.line(n - 1).text.trim() !== '' ? '\n' : '';
+  const trail = at.text.trim() === '' ? '\n' : '\n\n';
+  return { from: at.from, to: at.from, insert: lead + text + trail };
+}
+
+/**
+ * The change that removes line `n` whole, along with the blank line it would
+ * otherwise leave behind. Without that the document collects empty paragraphs
+ * every time a figure is moved or deleted.
+ */
+function removal(doc, n) {
+  const line = doc.line(n);
+  const before = n === 1 || doc.line(n - 1).text.trim() === '';
+  const after = n < doc.lines && doc.line(n + 1).text.trim() === '';
+  const last = before && after ? doc.line(n + 1) : line;
+  return { from: line.from, to: Math.min(last.to + 1, doc.length), insert: '' };
+}
+
 /**
  * Writes a line that identifies itself by `match`: replaces it where it already
  * exists, otherwise inserts it before line `beforeLine`. One dispatch, so one
@@ -131,31 +170,47 @@ export function insertAtCursor(view, text, back = 0) {
 export function upsertLine(view, match, text, beforeLine) {
   if (!view) return;
   const doc = view.state.doc;
-  for (let n = 1; n <= doc.lines; n++) {
+  const n = findLine(doc, match);
+  if (n) {
     const line = doc.line(n);
-    if (line.text.includes(match)) {
-      if (line.text === text) return;
-      view.dispatch({ changes: { from: line.from, to: line.to, insert: text } });
-      return;
-    }
-  }
-  // Past the last line — a figure drawn below everything. Clamping to the last
-  // line would put it above the final paragraph instead of after it.
-  if (beforeLine + 1 > doc.lines) {
-    const tail = doc.sliceString(Math.max(0, doc.length - 2));
-    const lead = tail.endsWith('\n\n') ? '' : tail.endsWith('\n') ? '\n' : '\n\n';
-    view.dispatch({ changes: { from: doc.length, insert: lead + text + '\n' } });
+    if (line.text === text) return;
+    view.dispatch({ changes: { from: line.from, to: line.to, insert: text } });
     return;
   }
+  view.dispatch({ changes: insertion(doc, beforeLine, text) });
+}
 
-  // A block of its own, blank lines on both sides: the block that follows keeps
-  // its own marker, the one before does not swallow it as a continuation, and
-  // the figure reads as belonging to what comes before it.
-  const n = Math.max(beforeLine + 1, 1);
-  const at = doc.line(n);
-  const lead = n > 1 && doc.line(n - 1).text.trim() !== '' ? '\n' : '';
-  const trail = at.text.trim() === '' ? '\n' : '\n\n';
-  view.dispatch({ changes: { from: at.from, insert: lead + text + trail } });
+/**
+ * Like upsertLine, but the line may also have to change place: a figure dragged
+ * far enough belongs to another block, and then new numbers are not enough —
+ * the offsets would point from the wrong place the moment the text reflows.
+ *
+ * Removal and insertion go out as one dispatch, so a move is a single undo step.
+ */
+export function moveLine(view, match, text, beforeLine) {
+  if (!view) return;
+  const doc = view.state.doc;
+  const n = findLine(doc, match);
+  if (!n) return upsertLine(view, match, text, beforeLine);
+
+  const put = insertion(doc, beforeLine, text);
+  const cut = removal(doc, n);
+  // Already standing where it belongs: only the numbers changed.
+  if (put.from >= cut.from && put.from <= cut.to) {
+    const line = doc.line(n);
+    if (line.text === text) return;
+    view.dispatch({ changes: { from: line.from, to: line.to, insert: text } });
+    return;
+  }
+  view.dispatch({ changes: [cut, put].sort((a, b) => a.from - b.from) });
+}
+
+/** Removes the line holding `match`. The figure's file on disk is untouched. */
+export function deleteLine(view, match) {
+  if (!view) return;
+  const doc = view.state.doc;
+  const n = findLine(doc, match);
+  if (n) view.dispatch({ changes: removal(doc, n) });
 }
 
 /** Is the cursor between two dollar signs? Decides whether a macro is inserted

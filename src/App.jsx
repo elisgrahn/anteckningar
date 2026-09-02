@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { figureAtCursor, goTo, goToLine, inMath, insertAtCursor, setDoc, upsertLine } from './Editor.jsx';
-import { lineAt, markerAt, nextMarker, pageAt } from './sourcemap.js';
+import Editor, {
+  deleteLine,
+  figureAtCursor,
+  goTo,
+  goToLine,
+  inMath,
+  insertAtCursor,
+  moveLine,
+  setDoc,
+  upsertLine,
+} from './Editor.jsx';
+import { lineAt } from './sourcemap.js';
+import { anchorFor, offsetFrom, pageTop, placeCode, placedRects, svgSize } from './placed.js';
 import SymbolRow, { macros } from './SymbolRow.jsx';
 import Canvas from './Canvas.jsx';
 import PageDraw from './PageDraw.jsx';
@@ -171,17 +182,59 @@ export default function App() {
     };
   }, [source, figures]);
 
+  // What each figure file says about itself: its size on paper, how far in from
+  // its corner the ink starts, and a copy to show while it is being dragged.
+  // Read out of the files, not tracked — they are the truth.
+  const figureInfo = useMemo(() => {
+    const out = new Map();
+    for (const [path, bytes] of figures) {
+      const text = new TextDecoder().decode(bytes);
+      const size = svgSize(text);
+      if (!size) continue;
+      const strokes = fromSvg(text);
+      const origin = strokes?.length ? figureOrigin(strokes) : null;
+      const top = strokes?.length ? inkTopLeft(strokes) : null;
+      const ink = origin ? { x: (top.x - origin.x) / SCALE, y: (top.y - origin.y) / SCALE } : { x: 0, y: 0 };
+      out.set(path, { size, ink, href: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}` });
+    }
+    return out;
+  }, [figures]);
+
+  // Every placed figure as a rectangle on the page. Derived from the source and
+  // the latest markers, like the outline and the pending figures — no state of
+  // its own, so it cannot fall out of step with the text.
+  const placed = useMemo(() => {
+    if (source === null) return [];
+    return placedRects(
+      source,
+      layout.markers,
+      layout.pages,
+      (p) => figureInfo.get(p)?.size ?? null,
+      (p) => figureInfo.get(p)?.ink ?? null,
+    ).map((r) => ({ ...r, href: figureInfo.get(r.path)?.href ?? null }));
+  }, [source, layout, figureInfo]);
+
   const openCanvas = useCallback(async () => {
     const existing = figureAtCursor(viewRef.current);
     if (existing) {
       const name = existing.split('/').pop();
       const bytes = figures.get(FIG_DIR + name);
       const strokes = bytes ? fromSvg(new TextDecoder().decode(bytes)) : null;
-      setDrawing({ name, strokes: strokes ?? [], isNew: false });
+      // A placed figure keeps its anchor while it is added to, but its corner
+      // moves if the new ink reaches further up or left. The offsets are
+      // adjusted by that much on the way out, or the figure would slide.
+      const place = placed.find((p) => p.name === name) ?? null;
+      setDrawing({
+        name,
+        strokes: strokes ?? [],
+        isNew: false,
+        place,
+        origin: strokes?.length ? figureOrigin(strokes) : null,
+      });
     } else {
       setDrawing({ name: api.nextFigureName(sync.current.figures), strokes: [], isNew: true });
     }
-  }, [figures]);
+  }, [figures, placed]);
 
   // Double-clicking the output goes to the line in the code. If that line holds
   // a figure it opens for editing instead — the cursor is already in place.
@@ -205,32 +258,21 @@ export default function App() {
       // Which block the figure belongs to is decided by the ink, not by the
       // saved figure's padded corner — the padding is taller than a line of
       // text, so an underline would otherwise belong to the paragraph above.
-      const spot = pageAt(layout.pages, inkTopLeft(strokes).y / SCALE);
+      // Which block the figure belongs to is settled by anchorFor, the same
+      // rule a drag uses — see src/placed.js. It holds only because withMarkers
+      // closes the document with a sentinel block: without it a figure written
+      // after the final paragraph sat one line too high and jumped as soon as
+      // anything was typed after it. Measured with the sentinel: 109.49 both
+      // before and after.
+      const ink = inkTopLeft(strokes);
       const origin = figureOrigin(strokes);
-
-      // The block the figure belongs to, and the one after it. The line goes
-      // before the latter, which puts it after the former — a figure drawn
-      // under a heading belongs under it in the source too, or copying a
-      // heading with its contents would leave the figure behind.
-      //
-      // This is stable only because withMarkers closes the document with a
-      // sentinel block. Without it, a figure written after the final paragraph
-      // sat one line too high and jumped as soon as anything was typed after
-      // it. Measured with the sentinel: 109.49 both before and after.
-      //
-      // Across a page break the two anchors differ for real, and there the
-      // block itself is the only one that keeps the figure on its own page.
-      const own = markerAt(layout.markers, spot.page, spot.y) ?? layout.markers[0];
-      const after = nextMarker(layout.markers, own);
-      const flow = onPage.current.flow ?? (after && after.page === spot.page ? after : own);
+      const flow = onPage.current.flow ?? anchorFor(layout.markers, layout.pages, { x: ink.x / SCALE, y: ink.y / SCALE });
       if (!flow) return; // nothing to anchor to; the figure is saved anyway
       onPage.current.flow = flow;
 
-      const above = layout.pages.slice(0, flow.page - 1).reduce((a, p) => a + p.height, 0);
-      const dx = origin.x / SCALE - flow.x;
-      const dy = origin.y / SCALE - (above + flow.y);
-      const line = `#place(dx: ${dx.toFixed(1)}pt, dy: ${dy.toFixed(1)}pt, image("${FIG_DIR}${name}"))`;
-      upsertLine(viewRef.current, `image("${FIG_DIR}${name}")`, line, flow.line);
+      const { dx, dy } = offsetFrom(flow, layout.pages, { x: origin.x / SCALE, y: origin.y / SCALE });
+      const path = FIG_DIR + name;
+      upsertLine(viewRef.current, `image("${path}")`, placeCode(path, dx, dy), flow.line);
     },
     [layout],
   );
@@ -263,8 +305,45 @@ export default function App() {
     }, 400);
   };
 
+  // Selecting, moving and deleting a figure that is already on the page. The
+  // line in the source is the only thing that changes: the svg on disk is
+  // untouched, so a deleted figure turns up in the cleanup list rather than
+  // disappearing.
+  const anchorAt = useCallback(
+    (ink) => {
+      const a = anchorFor(layout.markers, layout.pages, ink);
+      return a ? { line: a.line, y: pageTop(layout.pages, a.page) + a.y } : null;
+    },
+    [layout],
+  );
+
+  const movePlaced = useCallback(
+    (item, ddx, ddy) => {
+      const origin = { x: item.x + ddx, y: item.y + ddy };
+      const flow = anchorFor(layout.markers, layout.pages, { x: origin.x + item.inkDx, y: origin.y + item.inkDy });
+      if (!flow) return;
+      const { dx, dy } = offsetFrom(flow, layout.pages, origin);
+      // Changing anchor has to move the line, not just its numbers, or the
+      // offsets point from the wrong block the moment the text reflows.
+      moveLine(viewRef.current, `image("${item.path}")`, placeCode(item.path, dx, dy), flow.line);
+    },
+    [layout],
+  );
+
+  const deletePlaced = useCallback((item) => {
+    deleteLine(viewRef.current, `image("${item.path}")`);
+  }, []);
+
+  const openPlaced = useCallback(
+    (item) => {
+      goToLine(viewRef.current, item.line);
+      openCanvas();
+    },
+    [openCanvas],
+  );
+
   const finishCanvas = async (svgText) => {
-    const { name, isNew } = drawing;
+    const { name, isNew, place, origin } = drawing;
     try {
       const r = await api.saveFigure(name, svgText);
       sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
@@ -273,7 +352,18 @@ export default function App() {
       setFigures(next);
       // If we only added to a figure that is already in the text, the line
       // stays as it is. Only new figures are inserted.
-      if (isNew) insertAtCursor(viewRef.current, figureCode(name));
+      if (isNew) {
+        insertAtCursor(viewRef.current, figureCode(name));
+      } else if (place && origin) {
+        // A placed figure that grew upwards or to the left has a new corner.
+        // The offsets follow it, so the ink stays where it was drawn instead of
+        // sliding by the amount the figure grew.
+        const strokes = fromSvg(svgText);
+        const now = strokes?.length ? figureOrigin(strokes) : origin;
+        const dx = place.dx + (now.x - origin.x) / SCALE;
+        const dy = place.dy + (now.y - origin.y) / SCALE;
+        upsertLine(viewRef.current, `image("${place.path}")`, placeCode(place.path, dx, dy), place.line);
+      }
       setDrawing(null);
     } catch (e) {
       setStatus('figure not saved: ' + (e.message || e));
@@ -444,7 +534,17 @@ export default function App() {
         <section className="right" ref={rightRef}>
           <div className="page-stack">
             <div dangerouslySetInnerHTML={{ __html: svg }} />
-            <PageDraw pages={layout.pages} onStrokes={onPageStrokes} onPick={pick} scrollerRef={rightRef} />
+            <PageDraw
+              pages={layout.pages}
+              placed={placed}
+              onStrokes={onPageStrokes}
+              onPick={pick}
+              onOpenPlaced={openPlaced}
+              onMovePlaced={movePlaced}
+              onDeletePlaced={deletePlaced}
+              anchorAt={anchorAt}
+              scrollerRef={rightRef}
+            />
           </div>
         </section>
       </main>

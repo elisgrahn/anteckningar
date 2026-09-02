@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SCALE } from './ink.js';
 import { pageAt } from './sourcemap.js';
+import { hitPlaced } from './placed.js';
 import { paint, Tools, PEN_WIDTH, FLASH_MS, savedColor } from './Canvas.jsx';
 import * as draw from './strokes.js';
 
@@ -20,7 +21,21 @@ import * as draw from './strokes.js';
 const TAP_MS = 250;
 const TAP_PX = 3;
 
-export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
+// A figure already on the page is selected by a tap, and only then does a drag
+// inside its border move it. Selection being a mode you enter deliberately is
+// what keeps drawing on top of an existing figure possible: an unselected
+// figure is just backdrop, exactly as before.
+export default function PageDraw({
+  pages,
+  placed,
+  onStrokes,
+  onPick,
+  onOpenPlaced,
+  onMovePlaced,
+  onDeletePlaced,
+  anchorAt,
+  scrollerRef,
+}) {
   const hostRef = useRef(null);
   const canvasRef = useRef(null);
   const s = useRef(draw.createState(null));
@@ -30,6 +45,11 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
   const [undoCount, setUndoCount] = useState(0);
   const [shape, setShape] = useState(null);
   const [count, setCount] = useState(0);
+  const [selected, setSelected] = useState(null);
+  const [drag, setDrag] = useState(null);
+  // Css pixels per point, for the border and the anchor line. The strokes are
+  // drawn through the canvas transform and need no such factor.
+  const [cssPerPt, setCssPerPt] = useState(1);
 
   const toolRef = useRef(tool);
   toolRef.current = tool;
@@ -51,6 +71,8 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
     host.style.height = `${r.height}px`;
     const drawnPerCss = (box.height / r.height) * SCALE;
     scaleRef.current = drawnPerCss;
+    const perPt = r.height / box.height;
+    setCssPerPt((v) => (Math.abs(v - perPt) < 1e-9 ? v : perPt));
     const dpr = window.devicePixelRatio || 1;
     c.width = Math.round(r.width * dpr);
     c.height = Math.round(r.height * dpr);
@@ -102,8 +124,26 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
   /** Which page a drawn-pixel y belongs to, and where on it, in points. */
   const onPage = (drawn) => pageAt(pages, drawn.y / SCALE);
 
+  /** Client coordinates in page points — the units a placed figure lives in. */
+  const inPoints = (e) => {
+    const p = local(e);
+    return { x: p.x / SCALE, y: p.y / SCALE };
+  };
+
+  // The selection is held by name, not as a copy of the rectangle: the source
+  // is what decides where the figure is, and it changes under us on every
+  // recompile.
+  const sel = placed.find((p) => p.name === selected) ?? null;
+  const selRef = useRef(null);
+  selRef.current = sel;
+
   const finger = useRef(null);
   const down = useRef(null);
+  const moving = useRef(null);
+
+  // The dragged position is shown until the new rectangle arrives, so the
+  // figure does not snap back to where it was for the length of a compile.
+  useEffect(() => setDrag(null), [placed]);
 
   const onDown = (e) => {
     // The finger scrolls. Doing it by hand rather than through touch-action,
@@ -114,6 +154,19 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
     }
     if (!draw.allowPointer(s.current, e.pointerType, false)) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+
+    // Inside the selected figure's border the drag moves it instead of drawing.
+    // Only the selected one: an unselected figure has to stay drawable on top
+    // of, which is what adding to a sketch means.
+    if (sel) {
+      const at = inPoints(e);
+      if (hitPlaced([sel], at.x, at.y)) {
+        moving.current = { from: at };
+        setDrag({ ddx: 0, ddy: 0 });
+        return;
+      }
+    }
+
     const p = local(e);
     if (toolRef.current === 'eraser') {
       s.current.erasedThisDrag = false;
@@ -142,6 +195,11 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
       return;
     }
     if (e.buttons === 0) return;
+    if (moving.current) {
+      const p = inPoints(e);
+      setDrag({ ddx: p.x - moving.current.from.x, ddy: p.y - moving.current.from.y });
+      return;
+    }
     if (!draw.allowPointer(s.current, e.pointerType, false)) return;
     const evs = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
     if (toolRef.current === 'eraser') {
@@ -159,13 +217,35 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
       finger.current = null;
       return;
     }
+    // Letting go after a move: the line in the source gets the new offsets, and
+    // a new anchor if the figure ended up at another block.
+    if (moving.current) {
+      const from = moving.current.from;
+      moving.current = null;
+      const p = inPoints(e);
+      const d = { ddx: p.x - from.x, ddy: p.y - from.y };
+      if (selRef.current && Math.hypot(d.ddx, d.ddy) * SCALE > TAP_PX) {
+        setDrag(d);
+        onMovePlaced(selRef.current, d.ddx, d.ddy);
+      } else {
+        setDrag(null);
+      }
+      return;
+    }
+
     // A quick tap that went nowhere is a click, not a mark. Without this the
-    // double click that jumps to the source would leave two dots behind.
+    // double click that jumps to the source would leave two dots behind. The
+    // tap is also what selects a figure already on the page.
     const d = down.current;
     const points = s.current.current?.points;
     if (d && points && performance.now() - d.at < TAP_MS) {
       const far = points.some((p) => Math.hypot(p.x - d.p.x, p.y - d.p.y) > TAP_PX);
-      if (!far) return draw.cancelStroke(s.current);
+      if (!far) {
+        draw.cancelStroke(s.current);
+        const at = { x: d.p.x / SCALE, y: d.p.y / SCALE };
+        setSelected(hitPlaced(placed, at.x, at.y)?.name ?? null);
+        return;
+      }
     }
     if (draw.endStroke(s.current)) after();
   };
@@ -173,6 +253,9 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
   // Nothing here waits for a save button: every finished stroke is handed up,
   // and the figure on disk follows along. Done only ends the grouping.
   const after = () => {
+    // A stroke on the page starts a new figure, so a figure selected before it
+    // is no longer what the pen is working on.
+    setSelected(null);
     setUndoCount(s.current.undo.length);
     setCount(s.current.strokes.length);
     onStrokes(s.current.strokes.length ? { strokes: s.current.strokes, page: s.current.page } : null);
@@ -191,6 +274,7 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
 
   useEffect(() => {
     const onKey = (e) => {
+      if (e.key === 'Escape' && selected && !s.current.strokes.length) return setSelected(null);
       if (!s.current.strokes.length) return;
       if (e.key === 'Escape') return finish();
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
@@ -202,6 +286,20 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // Where the selected figure is right now: its own rectangle, plus however far
+  // it has been dragged since.
+  const rx = sel ? sel.x + (drag?.ddx ?? 0) : 0;
+  const ry = sel ? sel.y + (drag?.ddy ?? 0) : 0;
+  // Standing still the dashed line shows where the figure *is* anchored. While
+  // it is dragged it shows where it *would* anchor if let go now — which is the
+  // one thing about the model that is otherwise invisible.
+  const anchorY = !sel
+    ? 0
+    : drag
+      ? (anchorAt({ x: rx + sel.inkDx, y: ry + sel.inkDy })?.y ?? sel.anchorY)
+      : sel.anchorY;
+  const px = (pt) => `${pt * cssPerPt}px`;
+
   return (
     <div ref={hostRef} className="pagedraw">
       <canvas
@@ -211,12 +309,35 @@ export default function PageDraw({ pages, onStrokes, onPick, scrollerRef }) {
         onPointerUp={onUp}
         onPointerCancel={onUp}
         onDoubleClick={(e) => {
-          const p = local(e);
-          onPick(onPage(p));
+          // A figure already on the page opens for adding to. Anywhere else the
+          // double click goes to the line in the source, as before.
+          const at = inPoints(e);
+          const hit = hitPlaced(placed, at.x, at.y);
+          if (hit) return onOpenPlaced(hit);
+          onPick(onPage(local(e)));
         }}
         onContextMenu={(e) => e.preventDefault()}
         style={{ touchAction: 'none' }}
       />
+      {sel && (
+        <>
+          <div className="anchor-line" style={{ top: px(anchorY) }} />
+          <div className="placed-box" style={{ left: px(rx), top: px(ry), width: px(sel.w), height: px(sel.h) }}>
+            {drag && sel.href && <img src={sel.href} alt="" draggable="false" />}
+          </div>
+          <button
+            className="placed-x"
+            title={`Remove ${sel.name} from the text`}
+            style={{ left: px(rx + sel.w), top: px(ry) }}
+            onClick={() => {
+              setSelected(null);
+              onDeletePlaced(sel);
+            }}
+          >
+            ×
+          </button>
+        </>
+      )}
       {count > 0 && (
         <div className="pagedraw-bar" onPointerDown={(e) => e.stopPropagation()}>
           <Tools
