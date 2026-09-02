@@ -8,7 +8,7 @@ const COLORS = ['#16233d', '#b03030', '#1c6b45'];
 // Gesten: håll spetsen still i slutet av ett drag så snäpper det till en form.
 const HÅLL_MS = 500;
 const STILLA_PX = 4;
-const BLÄNK_MS = 500;
+const BLÄNK_MS = 1100;
 const HISTORIK = 60;
 
 const NAMN = { linje: 'linje', cirkel: 'cirkel', rektangel: 'rektangel' };

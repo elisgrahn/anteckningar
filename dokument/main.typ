@@ -10,15 +10,12 @@
 
 
 
-#image("figurer/f-12.svg")
-#image("figurer/f-12.svg")
-#image("figurer/f-12.svg")
+#image("figurer/f-14.svg")
 
+#image("figurer/f-12.svg")
 
 yea
 
 #image("figurer/f-13.svg")
-#image("figurer/f-13.svg")
-
 
 
