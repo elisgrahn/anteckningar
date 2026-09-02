@@ -2,8 +2,10 @@
 // CM6-modul för Typst och en riktig tree-sitter-grammatik är för mycket för
 // den nytta vi behöver (rubriker, matte, #-kod, strängar, kommentarer, fetstil
 // och kursiv). Radbaserad tokenizer, ingen egentlig parsning.
+//
+// Tokennamnen är strängar och inte Tag-objekt: StreamLanguage slår upp dem i
+// sin tabell, delar på punkt och tolkar senare delar som modifierare.
 import { StreamLanguage } from "@codemirror/language";
-import { tags } from "@lezer/highlight";
 
 // Nyckelord som styr dokumentet snarare än anropar en funktion — resten av
 // #-identifierarna (#image, #figure, ...) behandlas som funktionsnamn.
@@ -22,7 +24,7 @@ function typstToken(stream, tillstånd) {
     } else {
       stream.skipToEnd();
     }
-    return tags.comment;
+    return 'comment';
   }
 
   if (tillstånd.iMatte) {
@@ -31,16 +33,16 @@ function typstToken(stream, tillstånd) {
     } else {
       stream.skipToEnd();
     }
-    return tags.special(tags.string);
+    return 'string.special';
   }
 
-  if (stream.sol() && stream.match(/^=+ .*/)) return tags.heading;
+  if (stream.sol() && stream.match(/^=+ .*/)) return 'heading';
 
   if (stream.eatSpace()) return null;
 
   if (stream.match("//")) {
     stream.skipToEnd();
-    return tags.comment;
+    return 'comment';
   }
 
   if (stream.match("/*")) {
@@ -50,7 +52,7 @@ function typstToken(stream, tillstånd) {
     } else {
       stream.match("*/");
     }
-    return tags.comment;
+    return 'comment';
   }
 
   if (stream.peek() === '"') {
@@ -58,7 +60,7 @@ function typstToken(stream, tillstånd) {
     // radslut utan avslutande citattecken äts bara citatet, så resten av
     // raden faller tillbaka till vanlig text i stället för att läcka ett
     // öppet strängläge till nästa rad.
-    if (stream.match(/^"(?:[^"\\]|\\.)*"/)) return tags.string;
+    if (stream.match(/^"(?:[^"\\]|\\.)*"/)) return 'string';
     stream.next();
     return null;
   }
@@ -66,12 +68,12 @@ function typstToken(stream, tillstånd) {
   if (stream.peek() === "$") {
     const vidRadstart = /^\s*$/.test(stream.string.slice(0, stream.start));
     stream.next();
-    if (stream.match(/^[^$]*\$/)) return tags.special(tags.string); // stängs på samma rad
+    if (stream.match(/^[^$]*\$/)) return 'string.special'; // stängs på samma rad
     if (vidRadstart) {
       // $ först på raden tolkas som start på flerradig matte (blockform).
       tillstånd.iMatte = true;
       stream.skipToEnd();
-      return tags.special(tags.string);
+      return 'string.special';
     }
     // Ett ensamt $ mitt i text — troligen en genuin symbol/felskrivning,
     // inte matte. Färga bara tecknet och låt resten av raden vara text.
@@ -80,11 +82,11 @@ function typstToken(stream, tillstånd) {
 
   if (stream.match(/^#[a-zA-Z_][\w-]*/)) {
     const namn = stream.current().slice(1);
-    return NYCKELORD.has(namn) ? tags.keyword : tags.function(tags.variableName);
+    return NYCKELORD.has(namn) ? 'keyword' : 'variableName.function';
   }
 
-  if (stream.match(/^\*[^*\n]+\*/)) return tags.strong;
-  if (stream.match(/^_[^_\n]+_/)) return tags.emphasis;
+  if (stream.match(/^\*[^*\n]+\*/)) return 'strong';
+  if (stream.match(/^_[^_\n]+_/)) return 'emphasis';
 
   stream.next();
   return null;

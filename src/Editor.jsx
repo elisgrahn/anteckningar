@@ -3,6 +3,8 @@ import { EditorView, keymap, highlightActiveLine } from '@codemirror/view';
 import { EditorState, Prec } from '@codemirror/state';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { search, searchKeymap } from '@codemirror/search';
+import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { typstSpråk } from './typstsprak.js';
 
 // CodeMirror i stället för Monaco: Monaco är byggd för mus och tangentbord
 // och beter sig illa med pekskärm och iPad-tangentbord.
@@ -26,6 +28,10 @@ export default function Editor({ value, onChange, onDraw, onMarkör, viewRef }) 
         extensions: [
           history(),
           highlightActiveLine(),
+          typstSpråk,
+          // Utan syntaxHighlighting får taggarna ingen färg alls — språket
+          // ensamt räcker inte.
+          syntaxHighlighting(defaultHighlightStyle),
           search(),
           EditorView.lineWrapping,
           Prec.high(
