@@ -72,8 +72,23 @@ från en webbsida — `E` hålls nere för sudd i stället.
 
 `Cmd-D` öppnar ritläget. Står markören på en rad som redan matchar
 `image("...svg")` öppnas den figuren för påfyllning; annars skapas nästa
-lediga `f-NN.svg`. Klar sparar figuren och infogar `#figure(image(...))` vid
-markören som **en enda** ångra-bar ändring, med fokus tillbaka i editorn.
+lediga `f-NN.svg`. Klar sparar figuren och infogar `#image("figurer/f-NN.svg")`
+som **en enda** ångra-bar ändring, med fokus tillbaka i editorn.
+
+Storleken kommer från figuren själv: `toSvg` skriver `width`/`height` i punkter
+(`SKALA = 2.0`, alltså två ritade pixlar per punkt) medan `viewBox` står kvar i
+ritpixlar. Ingen `width:` i den infogade koden — en liten skiss blir liten på
+pappret. A4:s textbredd är 453 pt, så en figur bredare än ~907 ritade pixlar
+spiller ut i marginalen; justera `SKALA` i `src/ink.js` om det blir ett problem.
+
+### Uppskjuten infogning
+
+Markörens position går inte att synka mellan enheter, så infogningen sker på den
+maskin som har markören. En figur är **väntande** om dess filnamn inte förekommer
+i källan — härlett i `App.jsx`, ingen state på servern, vilket gör att knappen
+"N nya figurer" dyker upp på alla klienter av sig själv. Ritar man på iPaden utan
+att ha rört editorn (`harMarkör`, satt av editorns focus-handler) sparas figuren
+och lämnas väntande.
 
 ### Editorn
 
@@ -81,6 +96,9 @@ CodeMirror 6, inte Monaco — Monaco beter sig illa med pekskärm och
 iPad-tangentbord. Editorn skapas en gång och äger sedan texten; ändringar
 utifrån (poll från andra enheten) går genom `setDoc`, som behåller markören.
 Ingen syntaxfärgning för Typst.
+
+Mount-effekten har `[]` som deps, så props når den genom refen `senaste` — nya
+callbacks måste läggas där, annars stänger de om första renderns värden.
 
 ## Medvetet utelämnat
 
