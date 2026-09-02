@@ -151,15 +151,20 @@ Punkterna hålls i **ritade pixlar** (sidpunkter × `SCALE`), inte skärmpixlar,
 figuren blir lika stor oavsett skalning och snäpptröskorna betyder samma sak på
 båda ytorna.
 
-En fritt placerad figur skrivs som `#place(dx:, dy:, image(...))` som ett eget
-stycke, före **nästa** block — vilket textmässigt är efter det block figuren hör
-till. Det är avsiktligt: kopierar man en rubrik med allt under sig ska figuren
-följa med, och en figur ska inte ligga ovanför det den hör ihop med.
+En fritt placerad figur skrivs som `#place(dx:, dy:, image(...))` **omedelbart
+före sitt block, utan tom rad emellan**. De två måste höra ihop.
 
-Det går ihop med matematiken därför att en osynlig rad som eget stycke mellan
-två block har **samma flödesposition som blocket efter** — mätt, 89,05 pt i båda
-fallen. Därför är förskjutningen exakt trots att raden flyttats. `#place`
-påverkar inte textflödet, mätt ord för ord.
+Att i stället lägga raden efter blocket läser bättre i källan och har prövats.
+Det håller inte: ett isolerat `#place`-block har ingen egen stabil
+flödesposition — den beror på vad som följer efter det, så ett nytt stycke efter
+figuren sköt ner figuren ovanpå det. Före sitt block är mätt stabil i alla fall:
+text efter lämnar den ifred, text före flyttar den exakt lika mycket, och att
+dess eget stycke växer rör den inte. `#place` påverkar inte textflödet, mätt ord
+för ord.
+
+Priset är att raden står ovanför det den hör till, vilket är sämre att läsa och
+sämre att kopiera. Det är ett läsbarhetsproblem, inte ett korrekthetsproblem —
+lös det i editorn, inte genom att flytta raden.
 
 Två fällor: **ankaret väljs på bläckets övre kant** (`inkTopLeft`), inte på det
 vadderade hörnet — vadderingen är 8 linjebredder, högre än en textrad, så en
