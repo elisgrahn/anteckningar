@@ -1,8 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { getStroke } from 'perfect-freehand';
 import { toSvg, hitStroke, pathFromOutline } from './ink.js';
+import { känn } from './former.js';
 
 const COLORS = ['#16233d', '#b03030', '#1c6b45'];
+
+// Gesten: håll spetsen still i slutet av ett drag så snäpper det till en form.
+const HÅLL_MS = 500;
+const STILLA_PX = 4;
+const BLÄNK_MS = 500;
+const HISTORIK = 60;
+
+const NAMN = { linje: 'linje', cirkel: 'cirkel', rektangel: 'rektangel' };
+
+// Ångra arbetar på hela draglistan i stället för att poppa sista draget, så
+// att både suddning och en snäppt form går att ta tillbaka.
+function minns(st, läge) {
+  st.ångra.push(läge);
+  if (st.ångra.length > HISTORIK) st.ångra.shift();
+}
 
 export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
   const boxRef = useRef(null);
@@ -13,11 +29,20 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     current: null,
     lastPenAt: 0,
     dirty: true,
+    ångra: [],
+    // Vila: var spetsen senast rörde sig mer än STILLA_PX, och när.
+    vilaVid: null,
+    sistRörd: 0,
+    prövad: false, // formen redan prövad i den här vilan
+    låst: false, // draget har snäppt och tar inte emot fler punkter
+    råa: null, // punkterna som faktiskt ritades, för Cmd-Z
+    blänk: null,
   });
 
   const [tool, setTool] = useState('penna');
   const [color, setColor] = useState(COLORS[0]);
-  const [count, setCount] = useState(s.current.strokes.length);
+  const [ångraAntal, setÅngraAntal] = useState(0);
+  const [form, setForm] = useState(null);
 
   const toolRef = useRef(tool);
   toolRef.current = tool;
@@ -64,10 +89,44 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     const draw = () => {
       const st = s.current;
       const c = canvasRef.current;
+
+      // Prövningen ligger utanför dirty-blocket: står spetsen still kommer
+      // inga pointermove, och då är det ingenting som gör ritningen smutsig.
+      if (st.current && !st.låst && !st.prövad && performance.now() - st.sistRörd > HÅLL_MS) {
+        st.prövad = true;
+        const träff = känn(st.current.points);
+        if (träff) {
+          st.råa = st.current.points;
+          st.current = { ...st.current, points: träff.points };
+          st.låst = true;
+          st.blänk = { points: träff.points, width: st.current.width, slut: performance.now() + BLÄNK_MS };
+          st.dirty = true;
+          setForm(NAMN[träff.typ]);
+          clearTimeout(st.formTimer);
+          st.formTimer = setTimeout(() => setForm(null), 1400);
+        }
+      }
+
       if (c && c.width && st.dirty) {
         const ctx = c.getContext('2d', { desynchronized: true });
         const dpr = window.devicePixelRatio || 1;
         ctx.clearRect(0, 0, c.width / dpr, c.height / dpr);
+
+        // Ett blänk bakom formen när den snäppt, så man ser att det hände.
+        if (st.blänk) {
+          const kvar = (st.blänk.slut - performance.now()) / BLÄNK_MS;
+          if (kvar <= 0) st.blänk = null;
+          else {
+            const halo = getStroke(st.blänk.points, {
+              size: st.blänk.width * 8,
+              thinning: 0,
+              simulatePressure: false,
+            });
+            ctx.fillStyle = `rgba(28, 107, 69, ${(0.25 * kvar).toFixed(3)})`;
+            ctx.fill(new Path2D(pathFromOutline(halo)));
+          }
+        }
+
         const all = st.current ? [...st.strokes, st.current] : st.strokes;
         for (const stroke of all) {
           // thinning/simulatePressure avstängda: fast bredd (stroke.width),
@@ -81,7 +140,8 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
           ctx.fillStyle = stroke.color;
           ctx.fill(new Path2D(pathFromOutline(outline)));
         }
-        st.dirty = false;
+        // Blänket bleknar, alltså måste nästa bild ritas om ändå.
+        st.dirty = Boolean(st.blänk);
       }
       raf = requestAnimationFrame(draw);
     };
@@ -106,21 +166,34 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
 
   const erase = (x, y) => {
     const st = s.current;
-    const before = st.strokes.length;
-    st.strokes = st.strokes.filter((stroke) => !hitStroke(stroke, x, y, 14));
-    if (st.strokes.length !== before) {
-      st.dirty = true;
-      setCount(st.strokes.length);
+    const kvar = st.strokes.filter((stroke) => !hitStroke(stroke, x, y, 14));
+    if (kvar.length === st.strokes.length) return;
+    // En hel suddning är ett ångra-steg, inte ett per träffat drag.
+    if (!st.suddat) {
+      minns(st, st.strokes);
+      st.suddat = true;
     }
+    st.strokes = kvar;
+    st.dirty = true;
+    setÅngraAntal(st.ångra.length);
   };
 
   const onDown = (e) => {
     if (!allowed(e)) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = local(e);
-    if (toolRef.current === 'sudd') return erase(p.x, p.y);
-    s.current.current = { color: colorRef.current, width: 2.4, points: [p] };
-    s.current.dirty = true;
+    const st = s.current;
+    if (toolRef.current === 'sudd') {
+      st.suddat = false;
+      return erase(p.x, p.y);
+    }
+    st.current = { color: colorRef.current, width: 2.4, points: [p] };
+    st.vilaVid = p;
+    st.sistRörd = performance.now();
+    st.prövad = false;
+    st.låst = false;
+    st.råa = null;
+    st.dirty = true;
   };
 
   const onMove = (e) => {
@@ -135,26 +208,42 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
       }
       return;
     }
-    if (!st.current) return;
-    for (const ev of evs) st.current.points.push(local(ev));
+    if (!st.current || st.låst) return; // efter ett snäpp ligger formen fast
+    for (const ev of evs) {
+      const p = local(ev);
+      st.current.points.push(p);
+      if (Math.hypot(p.x - st.vilaVid.x, p.y - st.vilaVid.y) > STILLA_PX) {
+        st.vilaVid = p;
+        st.sistRörd = performance.now();
+        st.prövad = false;
+      }
+    }
     st.dirty = true;
   };
 
   const onUp = () => {
     const st = s.current;
-    if (st.current) {
-      st.strokes.push(st.current);
-      st.current = null;
-      st.dirty = true;
-      setCount(st.strokes.length);
-    }
+    if (!st.current) return;
+    const klar = st.current;
+    minns(st, st.strokes);
+    // Snäppte draget läggs den ritade formen in som ett eget steg, så att
+    // första Cmd-Z ger tillbaka den i stället för att radera draget.
+    if (st.råa) minns(st, [...st.strokes, { ...klar, points: st.råa }]);
+    st.strokes = [...st.strokes, klar];
+    st.current = null;
+    st.råa = null;
+    st.låst = false;
+    st.dirty = true;
+    setÅngraAntal(st.ångra.length);
   };
 
   const undo = () => {
     const st = s.current;
-    st.strokes.pop();
+    const förra = st.ångra.pop();
+    if (!förra) return;
+    st.strokes = förra;
     st.dirty = true;
-    setCount(st.strokes.length);
+    setÅngraAntal(st.ångra.length);
   };
 
   const done = () => {
@@ -215,9 +304,10 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
               aria-label={'Färg ' + c}
             />
           ))}
-          <button onClick={undo} disabled={!count}>
+          <button onClick={undo} disabled={!ångraAntal}>
             Ångra
           </button>
+          {form && <span className="snäpp">{form}</span>}
         </div>
         <div className="right">
           <button onClick={onCancel}>Avbryt <kbd>Esc</kbd></button>
