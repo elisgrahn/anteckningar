@@ -108,18 +108,3 @@ export function markerAt(markers, page, y) {
 export function lineAt(markers, page, y) {
   return markerAt(markers, page, y)?.line ?? null;
 }
-
-/**
- * The marker for the block after this one.
- *
- * A figure is written on the line before its flow anchor, so anchoring to the
- * *next* block is what puts the line after the block the figure belongs to —
- * which is where it has to be if a heading and everything under it is to be
- * copied in one piece. An isolated invisible block between two blocks has the
- * same flow position as the block after it, measured, so the arithmetic is
- * unchanged by the move.
- */
-export function nextMarker(markers, marker) {
-  if (!marker) return null;
-  return markers.find((m) => m.line > marker.line) ?? null;
-}
