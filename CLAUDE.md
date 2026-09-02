@@ -4,9 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Språk
 
-Kod, kommentarer, identifierare, commit-meddelanden och UI-text är på svenska.
-Behåll det. Blandad svenska/engelska förekommer där bibliotekens API:er tvingar
-fram engelska (`compile`, `strokes`, `source`) — följ omgivande fil.
+**Koden är engelsk**: identifierare, kommentarer och all synlig UI-text.
+**Dokumentationen är svensk**: README, kravspecar och commit-meddelanden.
+
+Tre strängar står kvar på svenska med flit, var och en kommenterad på plats —
+ändra dem inte utan att förstå varför:
+
+- `SCENE_OPEN = '<!--scen:'` i `ink.js` är inskriven i varje figur på disk.
+- `COLOR_KEY = 'anteckningar.färg'` ligger redan i användarens webbläsare.
+- Makroregexen i `SymbolRow.jsx` tillåter svenska bokstäver eftersom den läser
+  användarens dokument, inte den här koden.
+
+Katalogerna `dokument/` och `figurer/` är sökvägar inne i användarens dokument,
+refererade från `main.typ`, inte identifierare. De byter aldrig namn.
 
 ## Kommandon
 
@@ -25,11 +35,11 @@ appen och titta på förhandsvisningen.
 
 En Typst-editor med ritläge. Tre lager som inte känner till varandra:
 
-**Server = Vite-plugin.** `filApi()` i `vite.config.js` är hela backenden — ett
+**Server = Vite-plugin.** `fileApi()` i `vite.config.js` är hela backenden — ett
 connect-middleware monterat på både dev- och preview-servern. Det finns ingen
 separat serverprocess och inget fil-API i en byggd `dist/`. Fyra rutter:
 `GET /api/state` (källa + mtime + figurernas mtimes i ett anrop),
-`PUT /api/doc`, `GET|PUT /api/figur/:namn`.
+`PUT /api/doc`, `GET|PUT|DELETE /api/figure/:name`.
 
 **Sanningen ligger på disk i `dokument/`** — `main.typ` och `figurer/*.svg` som
 riktiga filer på maskinen som kör servern, versionshanterbara och kompilerbara
@@ -38,9 +48,12 @@ utan egen sanning. `dokument/` skapas och fylls med ett startdokument av
 `ensure()` om det saknas.
 
 **Synk är poll + debounce, sista skrivningen vinner.** `App.jsx` håller hela
-modellen i `sync.current = { mtime, sparad, figurer, skriver }`; skillnaden
-mellan `sparad` (vad vi senast skickade) och `sourceRef.current` (vad som står
-i editorn) avgör om ett inkommande serversvar får skriva över texten. Sparar
+modellen i `sync.current = { mtime, saved, figures, writing, loaded }`;
+skillnaden mellan `saved` (vad vi senast skickade) och `sourceRef.current` (vad
+som står i editorn) avgör om ett inkommande serversvar får skriva över texten.
+`loaded` är ett skydd mot det enda sätt appen kan förstöra arbete på: en
+misslyckad första hämtning faller tillbaka på tom editor (invariant 6), och utan
+flaggan skrev autospara den tomheten till disk. Sparar
 400 ms efter senaste tangenttryck, pollar var 1500 ms, kompilerar 220 ms efter
 ändring. `src/server.js` är klientsidans fyra fetch-funktioner — det är de som
 byts ut mot Supabase, inget annat.
@@ -53,11 +66,11 @@ Typst har **inga inbyggda typsnitt**: utan de sex filerna i `public/fonts` ger
 varje rad text `no font could be found`, och matten kräver särskilt
 NewCMMath-Regular.
 
-### Hopp mellan utfall och källa (`src/markorer.js`)
+### Hopp mellan utfall och källa (`src/sourcemap.js`)
 
 Webbkompilatorn exporterar **inga spann** — `page_sources` är tom och `data-tid`
 är ett innehållsfingeravtryck för inkrementell diffning, inte en källposition.
-Dokumentet får därför berätta själv: `medMarkörer()` skjuter in osynliga
+Dokumentet får därför berätta själv: `withMarkers()` skjuter in osynliga
 `#metadata`-markörer i den kopia som kompileras, och `query` ger tillbaka sida
 och punktposition för varje markör.
 
@@ -66,11 +79,11 @@ Tre saker som är lätta att gå på:
 - Positionerna måste hämtas ur **samma** kompilering som artefakten, via
   `runWithWorld`. Ett ensamt `compiler.query()` misslyckas med `document is not
   compiled`, eftersom det tar en färsk snapshot utan att kompilera.
-- Markören måste stå på **egen rad** och bara vid blockstart. `#__am(6)= Rubrik`
+- Markören måste stå på **egen rad** och bara vid blockstart. `#__am(6)= Heading`
   gör att `=` inte längre står först på raden, och rubriken blir vanlig text.
   Aldrig inuti råblock, flerradig matte eller flerradiga anrop.
-- Kompilatorns felmeddelanden pekar på **kopian**. `medMarkörer` returnerar en
-  radkarta och `ursprungsrad()` översätter tillbaka, annars visar editorn fel rad.
+- Kompilatorns felmeddelanden pekar på **kopian**. `withMarkers` returnerar en
+  radkarta och `originalLine()` översätter tillbaka, annars visar editorn fel rad.
 
 Filen på disk rörs aldrig (invariant 1). Att kopian ger identisk layout är mätt
 med riktiga `typst`, ord för ord, inte antaget. Upplösningen är blocknivå: ett
@@ -98,27 +111,27 @@ stryks. `pathFromOutline` i `ink.js` delas av canvasen (`Path2D`) och `toSvg`.
 `thinning: 0` och `simulatePressure: false` är nödvändiga — vi ritar med fast
 bredd, och utan dem gissar biblioteket tryck och strecket blir ojämnt.
 
-**Formigenkänning** (`src/former.js`, ren geometri utan beroenden): står spetsen
-still — under `STILLA_PX` i mer än `HÅLL_MS` — byts punkterna mot en idealiserad
+**Formigenkänning** (`src/shapes.js`, ren geometri utan beroenden): står spetsen
+still — under `STILL_PX` i mer än `HOLD_MS` — byts punkterna mot en idealiserad
 linje, ellips eller rektangel. Prövningen ligger *utanför* `dirty`-blocket i
 renderloopen, eftersom en still spets inte ger några `pointermove` och därmed
-ingenting som gör ritningen smutsig. `känn()` returnerar en vanlig punktlista, så
+ingenting som gör ritningen smutsig. `recognise()` returnerar en vanlig punktlista, så
 scenformatet och `hitStroke` är opåverkade.
 
-Ångra arbetar på hela draglistan (`st.ångra`, ögonblicksbilder), inte på det
+Ångra arbetar på hela draglistan (`st.undo`, ögonblicksbilder), inte på det
 sista draget. Ett snäpp lägger den ritade formen som ett eget steg, så första
 Cmd-Z ger tillbaka den innan andra raderar draget.
 
 `Cmd-D` öppnar ritläget. Står markören på en rad som redan matchar
 `image("...svg")` öppnas den figuren för påfyllning; annars skapas nästa
-lediga `f-NN.svg`. Klar sparar figuren och infogar `#image("figurer/f-NN.svg")`
+lediga `f-NN.svg`. Done sparar figuren och infogar `#image("figurer/f-NN.svg")`
 som **en enda** ångra-bar ändring, med fokus tillbaka i editorn.
 
 Storleken kommer från figuren själv: `toSvg` skriver `width`/`height` i punkter
-(`SKALA = 2.0`, alltså två ritade pixlar per punkt) medan `viewBox` står kvar i
+(`SCALE = 2.0`, alltså två ritade pixlar per punkt) medan `viewBox` står kvar i
 ritpixlar. Ingen `width:` i den infogade koden — en liten skiss blir liten på
 pappret. A4:s textbredd är 453 pt, så en figur bredare än ~907 ritade pixlar
-spiller ut i marginalen; justera `SKALA` i `src/ink.js` om det blir ett problem.
+spiller ut i marginalen; justera `SCALE` i `src/ink.js` om det blir ett problem.
 
 ### Var figuren hamnar
 
@@ -128,8 +141,8 @@ sin egen markör, som vid start står **sist i dokumentet** (`selection` i
 `Editor.jsx`), eftersom anteckningar växer nedåt.
 
 En figur är **väntande** om dess filnamn inte förekommer i källan — härlett i
-`App.jsx`, ingen state på servern, så knappen "N nya figurer" dyker upp på alla
-klienter av sig själv. Den är ett skyddsnät sedan Klar började infoga direkt:
+`App.jsx`, ingen state på servern, så knappen "N new figures" dyker upp på alla
+klienter av sig själv. Den är ett skyddsnät sedan Done började infoga direkt:
 den fångar figurer vars rad raderats eller som aldrig kom in i texten.
 
 ### Editorn
@@ -137,9 +150,14 @@ den fångar figurer vars rad raderats eller som aldrig kom in i texten.
 CodeMirror 6, inte Monaco — Monaco beter sig illa med pekskärm och
 iPad-tangentbord. Editorn skapas en gång och äger sedan texten; ändringar
 utifrån (poll från andra enheten) går genom `setDoc`, som behåller markören.
-Ingen syntaxfärgning för Typst.
 
-Mount-effekten har `[]` som deps, så props når den genom refen `senaste` — nya
+Syntaxfärgningen ligger i `src/typstlang.js`, en `StreamLanguage` utan
+tree-sitter. Tokennamnen är **strängar** (`variableName.function`), inte
+`Tag`-objekt — CodeMirror slår upp dem i sin egen tabell och delar på punkt.
+Utan `syntaxHighlighting(defaultHighlightStyle)` i extensions får de ingen färg
+alls, språket ensamt räcker inte.
+
+Mount-effekten har `[]` som deps, så props når den genom refen `latest` — nya
 callbacks måste läggas där, annars stänger de om första renderns värden.
 
 ## Medvetet utelämnat
