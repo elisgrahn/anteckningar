@@ -33,6 +33,9 @@ export default function App() {
   const figuresRef = useRef(new Map());
   const sourceRef = useRef(null);
 
+  // Figurnamn som stått i källan någon gång sedan sidan laddades.
+  const settFörut = useRef(new Set());
+
 
   const läsFigurer = useCallback(async (lista) => {
     const map = new Map(figuresRef.current);
@@ -69,6 +72,11 @@ export default function App() {
         sync.current.sparad = s.source;
         setSource(s.source);
       }
+
+      // Allt som redan låg på disken vid start räknas som sett, även om det
+      // inte står i texten. Annars skulle en figur vars rad raderats i går
+      // dyka upp som ny efter varje omladdning.
+      if (första) for (const namn of Object.keys(s.figurer)) settFörut.current.add(namn);
 
       const nu = figuresRef.current;
       const ny = await läsFigurer(s.figurer);
@@ -177,16 +185,16 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawing, openCanvas]);
 
-  // En figur är väntande om dess filnamn inte förekommer i källan. Det kräver
-  // ingen ny state på servern, och eftersom källan är delad ser alla klienter
-  // samma väntande figurer. Skyddsnät: Klar infogar direkt, så det här fångar
-  // bara figurer vars rad blivit raderad eller som aldrig kom in i texten.
+  // Väntande är en figur vars filnamn inte förekommer i källan och aldrig har
+  // gjort det. Att radera en figurrad är ett medvetet val — figuren ska då inte
+  // komma tillbaka som "ny" och erbjuda sig att infogas igen. Kvar blir det
+  // knappen faktiskt är till för: en figur som aldrig kom in i texten, till
+  // exempel när den andra enhetens skrivning hann före och tog bort raden.
   const väntande = useMemo(() => {
     if (source === null) return [];
-    return [...figures.keys()]
-      .map((k) => k.slice('figurer/'.length))
-      .filter((namn) => !source.includes(namn))
-      .sort();
+    const namn = [...figures.keys()].map((k) => k.slice('figurer/'.length));
+    for (const n of namn) if (source.includes(n)) settFörut.current.add(n);
+    return namn.filter((n) => !source.includes(n) && !settFörut.current.has(n)).sort();
   }, [figures, source]);
 
   // Alla på en gång, i namnordning, som en enda ångra-bar ändring.

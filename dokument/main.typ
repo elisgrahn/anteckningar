@@ -19,3 +19,5 @@ yea
 #image("figurer/f-13.svg")
 
 
+
+#image("figurer/f-15.svg")

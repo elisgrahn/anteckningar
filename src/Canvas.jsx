@@ -8,7 +8,10 @@ const COLORS = ['#16233d', '#b03030', '#1c6b45'];
 // Gesten: håll spetsen still i slutet av ett drag så snäpper det till en form.
 const HÅLL_MS = 500;
 const STILLA_PX = 4;
-const BLÄNK_MS = 1100;
+const BLÄNK_MS = 2200;
+// Andel av tiden med full styrka innan det börjar tona. En rak linjär toning
+// från låg alfa syns knappt efter halva tiden, oavsett hur lång den är.
+const BLÄNK_HÅLL = 0.45;
 const HISTORIK = 60;
 
 const NAMN = { linje: 'linje', cirkel: 'cirkel', rektangel: 'rektangel' };
@@ -103,7 +106,7 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
           st.dirty = true;
           setForm(NAMN[träff.typ]);
           clearTimeout(st.formTimer);
-          st.formTimer = setTimeout(() => setForm(null), 1400);
+          st.formTimer = setTimeout(() => setForm(null), BLÄNK_MS);
         }
       }
 
@@ -122,7 +125,8 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
               thinning: 0,
               simulatePressure: false,
             });
-            ctx.fillStyle = `rgba(28, 107, 69, ${(0.25 * kvar).toFixed(3)})`;
+            const styrka = Math.min(1, kvar / (1 - BLÄNK_HÅLL));
+            ctx.fillStyle = `rgba(28, 107, 69, ${(0.3 * styrka).toFixed(3)})`;
             ctx.fill(new Path2D(pathFromOutline(halo)));
           }
         }

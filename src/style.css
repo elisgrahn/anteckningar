@@ -122,7 +122,7 @@ main > section { min-width: 0; overflow: hidden; }
 .overlay-bar .snäpp {
   color: #1c6b45;
   font-size: 13px;
-  animation: tona 1.4s ease-out forwards;
+  animation: tona 2.2s ease-out forwards;
 }
 @keyframes tona {
   0%, 60% { opacity: 1; }
