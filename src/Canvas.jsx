@@ -13,6 +13,18 @@ const HISTORIK = 60;
 
 const NAMN = { linje: 'linje', cirkel: 'cirkel', rektangel: 'rektangel' };
 
+// Färgen är en inställning, inte innehåll, och hör därför hemma i webbläsaren
+// och inte i dokumentet. Kan kasta i privat läge, alltså try/catch.
+const FÄRG_NYCKEL = 'anteckningar.färg';
+const sparadFärg = () => {
+  try {
+    const f = localStorage.getItem(FÄRG_NYCKEL);
+    return COLORS.includes(f) ? f : COLORS[0];
+  } catch {
+    return COLORS[0];
+  }
+};
+
 // Ångra arbetar på hela draglistan i stället för att poppa sista draget, så
 // att både suddning och en snäppt form går att ta tillbaka.
 function minns(st, läge) {
@@ -40,7 +52,7 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
   });
 
   const [tool, setTool] = useState('penna');
-  const [color, setColor] = useState(COLORS[0]);
+  const [color, setColor] = useState(sparadFärg);
   const [ångraAntal, setÅngraAntal] = useState(0);
   const [form, setForm] = useState(null);
 
@@ -305,6 +317,11 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
               onClick={() => {
                 setColor(c);
                 setTool('penna');
+                try {
+                  localStorage.setItem(FÄRG_NYCKEL, c);
+                } catch {
+                  /* privat läge, färgen gäller bara den här sessionen */
+                }
               }}
               className={'swatch' + (c === color ? ' on' : '')}
               style={{ background: c }}
