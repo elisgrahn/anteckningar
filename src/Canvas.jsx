@@ -22,10 +22,7 @@ function remember(st, state) {
 
 // The colour is a setting, not content, and belongs in the browser rather than
 // in the document. Can throw in private mode, hence try/catch.
-//
-// The key stays Swedish on purpose: it is already written in people's browsers,
-// and renaming it would silently forget the colour they picked.
-const COLOR_KEY = 'anteckningar.färg';
+const COLOR_KEY = 'notes.penColor';
 const savedColor = () => {
   try {
     const c = localStorage.getItem(COLOR_KEY);

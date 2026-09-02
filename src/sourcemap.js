@@ -3,7 +3,7 @@
 // The document is made to report its own layout: the app injects invisible
 // metadata markers into the copy it sends to the compiler, and query returns
 // the page and point position of each marker. The file on disk is never
-// touched, so `typst compile dokument/main.typ` still works (invariant 1).
+// touched, so `typst compile document/main.typ` still works (invariant 1).
 //
 // The line number rides along inside the marker as data, so it does not matter
 // that injecting shifts the lines in the copy.

@@ -12,9 +12,9 @@ const FIXED = ['$', '_', '^', '(', ')', 'integral', 'sum', 'dif', '->', '<=', '!
 // Both `#let lg = ...` and `#let f(x) = ...`. Function macros are inserted
 // with the name alone — the parentheses are on the row.
 //
-// Swedish letters are allowed in the name because this reads the user's
-// document, which is written in Swedish, not this codebase.
-const MACRO = /^#let\s+([A-Za-zÅÄÖåäö_][\wÅÄÖåäö-]*)\s*[=(]/gm;
+// \p{L} rather than A-Za-z: this reads the user's document, which is written in
+// a natural language and may well name a macro with a letter outside ASCII.
+const MACRO = /^#let\s+([\p{L}_][\p{L}\p{N}_-]*)\s*[=(]/gmu;
 
 export function macros(source) {
   const out = [];

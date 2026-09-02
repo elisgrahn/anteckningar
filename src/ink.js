@@ -4,9 +4,9 @@
 
 import { getStroke } from 'perfect-freehand';
 
-// Swedish on purpose: this literal is written into every figure on disk, so
-// renaming it would make existing figures unreadable.
-const SCENE_OPEN = '<!--scen:';
+// Written into every figure on disk. Changing it makes older figures
+// unreadable, so it is migrated deliberately, not casually.
+const SCENE_OPEN = '<!--scene:';
 const SCENE_CLOSE = '-->';
 
 // Drawn pixels per point. Size on paper therefore follows what was actually

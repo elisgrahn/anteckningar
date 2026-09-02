@@ -25,7 +25,7 @@ ha den först är det ett rimligt val — då hoppas resten över.
 Samma som förra omgången, med noteringar om var den här omgången tar i dem.
 
 1. Vanlig Typst. Dokumentet ska gå att kompilera med `typst compile
-   dokument/main.typ` utan patchar, plugins eller egna kompilatorer.
+   document/main.typ` utan patchar, plugins eller egna kompilatorer.
 2. En figur är en självständig SVG-fil på disk som Typst renderar direkt, med
    dragen sparade som JSON i en kommentar sist i filen.
 3. Servern äger filerna. Klienterna har ingen egen sanning. **Uppgift 9 tar i
@@ -122,7 +122,7 @@ tecknet vid markören. Raden har två delar:
   notation hamnar därmed på raden av sig själv, utan att appen behöver känna
   till den, vilket är hela poängen med invariant 4.
 
-**Klart när.** Makrot `lg` i `dokument/main.typ` går att sätta in med ett tryck
+**Klart när.** Makrot `lg` i `document/main.typ` går att sätta in med ett tryck
 på iPaden utan tangentbord, och raden uppdateras när du definierar ett nytt.
 
 ## 8. Städa oanvända figurer
@@ -163,7 +163,7 @@ och att statusfältet visar när den inte är tom.
 
 **Klart när.** Slå på flygplansläge, skriv en mening, rita en figur, slå av
 flygplansläget. Båda hamnar på servern utan att något behöver klickas, och
-`dokument/` på maskinen ser ut som förväntat.
+`document/` på maskinen ser ut som förväntat.
 
 ---
 

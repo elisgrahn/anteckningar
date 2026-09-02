@@ -7,16 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Koden är engelsk**: identifierare, kommentarer och all synlig UI-text.
 **Dokumentationen är svensk**: README, kravspecar och commit-meddelanden.
 
-Tre strängar står kvar på svenska med flit, var och en kommenterad på plats —
-ändra dem inte utan att förstå varför:
+Ingen svenska finns kvar i `src/`, `vite.config.js` eller `index.html` — det
+går att kontrollera med `grep -rl "[åäöÅÄÖ]" src/`.
 
-- `SCENE_OPEN = '<!--scen:'` i `ink.js` är inskriven i varje figur på disk.
-- `COLOR_KEY = 'anteckningar.färg'` ligger redan i användarens webbläsare.
-- Makroregexen i `SymbolRow.jsx` tillåter svenska bokstäver eftersom den läser
-  användarens dokument, inte den här koden.
+Två strängar är format och inte namn, och kan inte ändras fritt:
 
-Katalogerna `dokument/` och `figurer/` är sökvägar inne i användarens dokument,
-refererade från `main.typ`, inte identifierare. De byter aldrig namn.
+- `SCENE_OPEN = '<!--scene:'` i `ink.js` står inskriven i varje figur på disk.
+  Byts den måste figurerna migreras i samma veva, annars går de inte att öppna.
+- `COLOR_KEY = 'notes.penColor'` ligger i användarens webbläsare. Byts den
+  glöms den valda pennfärgen, vilket är litet men onödigt.
+
+Makroregexen i `SymbolRow.jsx` använder `\p{L}` och inte `A-Za-z`, eftersom den
+läser användarens dokument — som är skrivet på svenska.
 
 ## Kommandon
 
@@ -41,10 +43,10 @@ separat serverprocess och inget fil-API i en byggd `dist/`. Fyra rutter:
 `GET /api/state` (källa + mtime + figurernas mtimes i ett anrop),
 `PUT /api/doc`, `GET|PUT|DELETE /api/figure/:name`.
 
-**Sanningen ligger på disk i `dokument/`** — `main.typ` och `figurer/*.svg` som
+**Sanningen ligger på disk i `document/`** — `main.typ` och `figures/*.svg` som
 riktiga filer på maskinen som kör servern, versionshanterbara och kompilerbara
 med vanliga `typst compile`. Klienterna (dator, iPad på samma nät) är kopior
-utan egen sanning. `dokument/` skapas och fylls med ett startdokument av
+utan egen sanning. `document/` skapas och fylls med ett startdokument av
 `ensure()` om det saknas.
 
 **Synk är poll + debounce, sista skrivningen vinner.** `App.jsx` håller hela
@@ -60,8 +62,8 @@ byts ut mot Supabase, inget annat.
 
 **Typst kompileras i webbläsaren** via typst.ts (`src/typst.js`). Wasm-modulen
 är ~28 MB (~11 MB över nätet), initieras en gång bakom `boot()`. Figurer skickas
-in som `mapShadow('/figurer/f-01.svg', bytes)` i ett virtuellt filsystem, så
-`image("figurer/f-01.svg")` i källan löser ut mot samma sökväg som på disk.
+in som `mapShadow('/figures/f-01.svg', bytes)` i ett virtuellt filsystem, så
+`image("figures/f-01.svg")` i källan löser ut mot samma sökväg som på disk.
 Typst har **inga inbyggda typsnitt**: utan de sex filerna i `public/fonts` ger
 varje rad text `no font could be found`, och matten kräver särskilt
 NewCMMath-Regular.
@@ -92,7 +94,7 @@ klick landar på styckets början, inte på ordet.
 ### Figurformatet
 
 En figur är en vanlig SVG som Typst renderar direkt, med dragen sparade som
-JSON i en HTML-kommentar sist i filen (`<!--scen:...-->`, `--` escapas till
+JSON i en HTML-kommentar sist i filen (`<!--scene:...-->`, `--` escapas till
 `- -`). Filen är alltså både bild och redigerbart dokument — det är därför en
 figur kan fyllas på i flera omgångar i stället för att ritas om. `toSvg` /
 `fromSvg` i `src/ink.js` är hela formatet. Ingen patchad Typst-kompilator.
@@ -124,7 +126,7 @@ Cmd-Z ger tillbaka den innan andra raderar draget.
 
 `Cmd-D` öppnar ritläget. Står markören på en rad som redan matchar
 `image("...svg")` öppnas den figuren för påfyllning; annars skapas nästa
-lediga `f-NN.svg`. Done sparar figuren och infogar `#image("figurer/f-NN.svg")`
+lediga `f-NN.svg`. Done sparar figuren och infogar `#image("figures/f-NN.svg")`
 som **en enda** ångra-bar ändring, med fokus tillbaka i editorn.
 
 Storleken kommer från figuren själv: `toSvg` skriver `width`/`height` i punkter
@@ -169,7 +171,7 @@ filträd, markeringsverktyg i ritläget.
 ## Att vara försiktig med
 
 - `README.md` inleder med "allt sparas i OPFS". Det stämmer inte längre —
-  lagringen är fil-API:t mot `dokument/`, vilket README:s egen nästa rubrik
+  lagringen är fil-API:t mot `document/`, vilket README:s egen nästa rubrik
   beskriver korrekt.
 - `filApi()` använder blockkropp med flit i `configureServer`: ett returvärde
   tolkas av Vite som en efter-hook, och `middlewares.use()` returnerar

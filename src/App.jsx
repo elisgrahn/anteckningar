@@ -9,9 +9,8 @@ import * as api from './server.js';
 
 const POLL_MS = 1500;
 
-// The figure directory keeps its Swedish name: it is a path inside the user's
-// document, referenced from main.typ, not an identifier in this code.
-const FIG_DIR = 'figurer/';
+// A path inside the user's document, referenced from main.typ.
+const FIG_DIR = 'figures/';
 
 // #image, not #figure: the latter exists for numbering and cross-references and
 // writes "Figure 1:" in the output, which is not what you want during a lecture.
@@ -21,7 +20,7 @@ export default function App() {
   const viewRef = useRef(null);
 
   const [source, setSource] = useState(null);
-  const [figures, setFigures] = useState(new Map()); // "figurer/x.svg" -> Uint8Array
+  const [figures, setFigures] = useState(new Map()); // "figures/x.svg" -> Uint8Array
   const [svg, setSvg] = useState('');
   // Where the lines landed in the latest rendering. Belongs to that exact svg
   // and is replaced together with it, or it would point wrong after a keystroke.

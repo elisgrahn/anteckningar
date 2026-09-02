@@ -49,7 +49,7 @@ async function start() {
  * the lines landed on the pages.
  *
  * figures: Map<string, Uint8Array> keyed by path relative to the root, e.g.
- * "figurer/f-01.svg".
+ * "figures/f-01.svg".
  *
  * What gets compiled is a copy carrying invisible markers, never the text on
  * disk. The positions come out of the same compilation as the artifact, via

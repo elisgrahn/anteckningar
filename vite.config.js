@@ -4,13 +4,10 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-// The files live on real disk in dokument/, owned by the machine running the
+// The files live on real disk in document/, owned by the machine running the
 // server. The clients hold no truth of their own, only a copy.
-//
-// The directory names stay Swedish: they are paths inside the user's document,
-// referenced from main.typ, not identifiers in this code.
-const ROOT = path.resolve('dokument');
-const FIGURES = path.join(ROOT, 'figurer');
+const ROOT = path.resolve('document');
+const FIGURES = path.join(ROOT, 'figures');
 const MAIN = path.join(ROOT, 'main.typ');
 
 const START = `#set page(paper: "a4")

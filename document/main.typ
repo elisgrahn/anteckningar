@@ -13,19 +13,19 @@ Ett fel jag ska äga: mina git add -A svepte med dina ritade figurer (f-05 till 
 = Föreläsning 1
 
 
-#image("figurer/f-16.svg")
+#image("figures/f-16.svg")
 
 
-#image("figurer/f-14.svg")
+#image("figures/f-14.svg")
 
-#image("figurer/f-12.svg")
+#image("figures/f-12.svg")
 
 
 = Föreläsning 2
 
 yea
 
-#image("figurer/f-13.svg")
+#image("figures/f-13.svg")
 
 
-#image("figurer/f-15.svg")
+#image("figures/f-15.svg")

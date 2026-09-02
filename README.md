@@ -5,7 +5,7 @@ typst.ts, allt sparas i OPFS, och figurer är SVG-filer som kan öppnas igen.
 
 ## Var filerna ligger
 
-`dokument/main.typ` och `dokument/figurer/*.svg`, som riktiga filer på maskinen
+`document/main.typ` och `document/figures/*.svg`, som riktiga filer på maskinen
 som kör servern. Det är sanningen. Datorn och iPaden är båda klienter mot samma
 mapp, så de ser samma dokument. Mappen kan versionshanteras med git, öppnas i
 VS Code och kompileras med vanliga `typst compile`.
@@ -32,7 +32,7 @@ hemskärmen så körs den i helskärm utan adressfält.
   figur öppnas den figuren för påfyllning i stället för att en ny skapas
 - Klar sparar figuren och lägger `#figure(image(...))` vid markören som en
   enda ångra-bar ändring, och lämnar tillbaka fokus till editorn
-- Figurer numreras automatiskt, `figurer/f-01.svg`. Ingen namnruta
+- Figurer numreras automatiskt, `figures/f-01.svg`. Ingen namnruta
 - Handlovsskydd: fingret ritar bara om pennan varit borta i mer än 1,5 sekunder,
   och all textmarkering och rullning blockeras medan pennan är i bruk
 - Sparas hela tiden, aldrig med en knapp
