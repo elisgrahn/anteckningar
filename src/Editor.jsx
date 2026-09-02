@@ -6,20 +6,23 @@ import { search, searchKeymap } from '@codemirror/search';
 
 // CodeMirror i stället för Monaco: Monaco är byggd för mus och tangentbord
 // och beter sig illa med pekskärm och iPad-tangentbord.
-export default function Editor({ value, onChange, onDraw, onFokus, viewRef }) {
+export default function Editor({ value, onChange, onDraw, viewRef }) {
   const host = useRef(null);
 
   // Editorn skapas en gång, men props byter identitet vid varje render.
   // Utan den här refen stänger keymapen om första renderns callbacks och
   // ritar med en tom figurlista.
   const senaste = useRef(null);
-  senaste.current = { onChange, onDraw, onFokus };
+  senaste.current = { onChange, onDraw };
 
   useEffect(() => {
     const view = new EditorView({
       parent: host.current,
       state: EditorState.create({
         doc: value,
+        // Sist i dokumentet, inte först. Anteckningar växer nedåt, så det är
+        // där nästa figur ska in om man inte flyttat markören själv.
+        selection: { anchor: value.length },
         extensions: [
           history(),
           highlightActiveLine(),
@@ -40,15 +43,6 @@ export default function Editor({ value, onChange, onDraw, onFokus, viewRef }) {
           keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) senaste.current.onChange(u.state.doc.toString());
-          }),
-          // Att markören stått i editorn är det som avgör om en ritad figur
-          // infogas direkt eller lämnas väntande. false: CodeMirror ska
-          // hantera fokus som vanligt.
-          EditorView.domEventHandlers({
-            focus: () => {
-              senaste.current.onFokus();
-              return false;
-            },
           }),
           EditorView.theme({
             '&': { height: '100%', fontSize: '15px' },

@@ -30,10 +30,6 @@ export default function App() {
   const figuresRef = useRef(new Map());
   const sourceRef = useRef(null);
 
-  // Markörens position går inte att synka mellan enheter: ett offset i
-  // texten blir ogiltigt så fort den andra enheten skriver en bokstav.
-  // Alltså infogar bara den maskin som faktiskt har markören.
-  const harMarkör = useRef(false);
 
   const läsFigurer = useCallback(async (lista) => {
     const map = new Map(figuresRef.current);
@@ -158,9 +154,7 @@ export default function App() {
       const nya = new Map(figuresRef.current).set('figurer/' + namn, api.tillBytes(svgText));
       figuresRef.current = nya;
       setFigures(nya);
-      // Har markören aldrig varit i editorn, som på iPaden, lämnas figuren
-      // väntande i stället för att hamna på fel ställe.
-      if (harMarkör.current) insertAtCursor(viewRef.current, kod(namn));
+      insertAtCursor(viewRef.current, kod(namn));
       setDrawing(null);
     } catch (e) {
       setStatus('figuren sparades inte: ' + (e.message || e));
@@ -180,7 +174,8 @@ export default function App() {
 
   // En figur är väntande om dess filnamn inte förekommer i källan. Det kräver
   // ingen ny state på servern, och eftersom källan är delad ser alla klienter
-  // samma väntande figurer.
+  // samma väntande figurer. Skyddsnät: Klar infogar direkt, så det här fångar
+  // bara figurer vars rad blivit raderad eller som aldrig kom in i texten.
   const väntande = useMemo(() => {
     if (source === null) return [];
     return [...figures.keys()]
@@ -222,13 +217,7 @@ export default function App() {
 
       <main className={'pane-' + pane}>
         <section className="left">
-          <Editor
-            value={source}
-            onChange={setSource}
-            onDraw={openCanvas}
-            onFokus={() => (harMarkör.current = true)}
-            viewRef={viewRef}
-          />
+          <Editor value={source} onChange={setSource} onDraw={openCanvas} viewRef={viewRef} />
           {errors.length > 0 && (
             <ul className="diags">
               {errors.slice(0, 4).map((d, i) => (

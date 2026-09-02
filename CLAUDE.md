@@ -81,14 +81,17 @@ ritpixlar. Ingen `width:` i den infogade koden — en liten skiss blir liten på
 pappret. A4:s textbredd är 453 pt, så en figur bredare än ~907 ritade pixlar
 spiller ut i marginalen; justera `SKALA` i `src/ink.js` om det blir ett problem.
 
-### Uppskjuten infogning
+### Var figuren hamnar
 
-Markörens position går inte att synka mellan enheter, så infogningen sker på den
-maskin som har markören. En figur är **väntande** om dess filnamn inte förekommer
-i källan — härlett i `App.jsx`, ingen state på servern, vilket gör att knappen
-"N nya figurer" dyker upp på alla klienter av sig själv. Ritar man på iPaden utan
-att ha rört editorn (`harMarkör`, satt av editorns focus-handler) sparas figuren
-och lämnas väntande.
+Markörens position går inte att synka mellan enheter — ett offset blir ogiltigt
+så fort den andra enheten skriver en bokstav. I stället infogar varje klient vid
+sin egen markör, som vid start står **sist i dokumentet** (`selection` i
+`Editor.jsx`), eftersom anteckningar växer nedåt.
+
+En figur är **väntande** om dess filnamn inte förekommer i källan — härlett i
+`App.jsx`, ingen state på servern, så knappen "N nya figurer" dyker upp på alla
+klienter av sig själv. Den är ett skyddsnät sedan Klar började infoga direkt:
+den fångar figurer vars rad raderats eller som aldrig kom in i texten.
 
 ### Editorn
 
