@@ -70,6 +70,22 @@ pennan varit borta i mer än 1500 ms, och `touchstart`/`touchmove` blockeras på
 document medan pennan är i bruk. Pennans dubbeltryck och kläm går inte att läsa
 från en webbsida — `E` hålls nere för sudd i stället.
 
+Strecken ritas med **perfect-freehand**: en kontur som fylls, inte en linje som
+stryks. `pathFromOutline` i `ink.js` delas av canvasen (`Path2D`) och `toSvg`.
+`thinning: 0` och `simulatePressure: false` är nödvändiga — vi ritar med fast
+bredd, och utan dem gissar biblioteket tryck och strecket blir ojämnt.
+
+**Formigenkänning** (`src/former.js`, ren geometri utan beroenden): står spetsen
+still — under `STILLA_PX` i mer än `HÅLL_MS` — byts punkterna mot en idealiserad
+linje, ellips eller rektangel. Prövningen ligger *utanför* `dirty`-blocket i
+renderloopen, eftersom en still spets inte ger några `pointermove` och därmed
+ingenting som gör ritningen smutsig. `känn()` returnerar en vanlig punktlista, så
+scenformatet och `hitStroke` är opåverkade.
+
+Ångra arbetar på hela draglistan (`st.ångra`, ögonblicksbilder), inte på det
+sista draget. Ett snäpp lägger den ritade formen som ett eget steg, så första
+Cmd-Z ger tillbaka den innan andra raderar draget.
+
 `Cmd-D` öppnar ritläget. Står markören på en rad som redan matchar
 `image("...svg")` öppnas den figuren för påfyllning; annars skapas nästa
 lediga `f-NN.svg`. Klar sparar figuren och infogar `#image("figurer/f-NN.svg")`
