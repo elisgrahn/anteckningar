@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { figureAtCursor, goTo, goToLine, inMath, insertAtCursor, setDoc } from './Editor.jsx';
-import { lineAt, pageAt } from './sourcemap.js';
+import Editor, { figureAtCursor, goTo, goToLine, inMath, insertAtCursor, setDoc, upsertLine } from './Editor.jsx';
+import { lineAt, markerAt, pageAt } from './sourcemap.js';
 import SymbolRow, { macros } from './SymbolRow.jsx';
 import Canvas from './Canvas.jsx';
+import PageDraw from './PageDraw.jsx';
 import { compile } from './typst.js';
-import { fromSvg } from './ink.js';
+import { figureOrigin, fromSvg, toSvg, SCALE } from './ink.js';
 import * as api from './server.js';
 
 const POLL_MS = 1500;
@@ -18,6 +19,7 @@ const figureCode = (name) => `\n#image("${FIG_DIR}${name}")\n`;
 
 export default function App() {
   const viewRef = useRef(null);
+  const rightRef = useRef(null);
 
   const [source, setSource] = useState(null);
   const [figures, setFigures] = useState(new Map()); // "figures/x.svg" -> Uint8Array
@@ -186,20 +188,60 @@ export default function App() {
   //
   // The resolution is block level, not per character: the click lands at the
   // start of the block, not on the word it hit. That is deliberate, not a bug.
-  const onPreviewDoubleClick = (e) => {
-    const svgEl = e.currentTarget.querySelector('svg');
-    const { markers, pages } = layout;
-    if (!svgEl || !markers.length || !pages.length) return;
-    const r = svgEl.getBoundingClientRect();
-    const height = svgEl.viewBox?.baseVal?.height;
-    if (!r.height || !height) return;
-
-    const { page, y } = pageAt(pages, ((e.clientY - r.top) / r.height) * height);
-    const line = lineAt(markers, page, y);
+  const pick = ({ page, y }) => {
+    const line = lineAt(layout.markers, page, y);
     if (line === null) return;
-
     goToLine(viewRef.current, line);
     if (figureAtCursor(viewRef.current)) openCanvas();
+  };
+
+  // A figure drawn on the page. The name and the anchor are decided when the
+  // first stroke lands and then stay put: the figure grows, but it keeps
+  // belonging to the block it was started at.
+  const onPage = useRef(null);
+
+  const placeFigure = useCallback(
+    async (name, strokes, page) => {
+      const origin = figureOrigin(strokes);
+      const spot = pageAt(layout.pages, origin.y / SCALE);
+      const anchor = onPage.current.anchor ?? markerAt(layout.markers, spot.page, spot.y) ?? layout.markers[0];
+      if (!anchor) return; // nothing to anchor to; the figure is saved anyway
+      onPage.current.anchor = anchor;
+
+      const dx = origin.x / SCALE - anchor.x;
+      const dy = spot.y - anchor.y;
+      const line = `#place(dx: ${dx.toFixed(1)}pt, dy: ${dy.toFixed(1)}pt, image("${FIG_DIR}${name}"))`;
+      upsertLine(viewRef.current, `image("${FIG_DIR}${name}")`, line, anchor.line);
+    },
+    [layout],
+  );
+
+  // Nothing waits for a save button: each finished stroke is written straight
+  // through. Done only ends the grouping, so the next stroke starts a new
+  // figure instead of joining this one.
+  const onPageStrokes = (data) => {
+    clearTimeout(onPage.current?.timer);
+    if (!data) {
+      onPage.current = null;
+      return;
+    }
+    if (!onPage.current) {
+      onPage.current = { name: api.nextFigureName(sync.current.figures), anchor: null };
+    }
+    const { name } = onPage.current;
+    onPage.current.timer = setTimeout(async () => {
+      try {
+        const svgText = toSvg(data.strokes);
+        const r = await api.saveFigure(name, svgText);
+        sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
+        const next = new Map(figuresRef.current).set(FIG_DIR + name, api.toBytes(svgText));
+        figuresRef.current = next;
+        setFigures(next);
+        await placeFigure(name, data.strokes, data.page);
+      } catch (e) {
+        setStatus('figure not saved: ' + (e.message || e));
+      }
+    }, 400);
   };
 
   const finishCanvas = async (svgText) => {
@@ -380,7 +422,12 @@ export default function App() {
             </ul>
           )}
         </section>
-        <section className="right" onDoubleClick={onPreviewDoubleClick} dangerouslySetInnerHTML={{ __html: svg }} />
+        <section className="right" ref={rightRef}>
+          <div className="page-stack">
+            <div dangerouslySetInnerHTML={{ __html: svg }} />
+            <PageDraw pages={layout.pages} onStrokes={onPageStrokes} onPick={pick} scrollerRef={rightRef} />
+          </div>
+        </section>
       </main>
 
       {drawing && (

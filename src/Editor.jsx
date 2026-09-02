@@ -120,6 +120,29 @@ export function insertAtCursor(view, text, back = 0) {
   view.focus();
 }
 
+/**
+ * Writes a line that identifies itself by `match`: replaces it where it already
+ * exists, otherwise inserts it before line `beforeLine`. One dispatch, so one
+ * undo step, and the cursor is carried along by CodeMirror.
+ *
+ * This is how a figure drawn on the page keeps its #place line up to date while
+ * it grows, without the app having to track a line number that keeps moving.
+ */
+export function upsertLine(view, match, text, beforeLine) {
+  if (!view) return;
+  const doc = view.state.doc;
+  for (let n = 1; n <= doc.lines; n++) {
+    const line = doc.line(n);
+    if (line.text.includes(match)) {
+      if (line.text === text) return;
+      view.dispatch({ changes: { from: line.from, to: line.to, insert: text } });
+      return;
+    }
+  }
+  const n = Math.min(Math.max(beforeLine + 1, 1), doc.lines);
+  view.dispatch({ changes: { from: doc.line(n).from, insert: text + '\n' } });
+}
+
 /** Is the cursor between two dollar signs? Decides whether a macro is inserted
  *  as `lg` or as `#lg`, since math mode uses the name bare. */
 export function inMath(view) {

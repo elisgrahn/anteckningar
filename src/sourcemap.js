@@ -91,11 +91,15 @@ export function pageAt(pages, yInSvg) {
 }
 
 /** The last marker at or above the point. Block level, not per character. */
-export function lineAt(markers, page, y) {
+export function markerAt(markers, page, y) {
   let hit = null;
   for (const m of markers) {
     if (m.page < page || (m.page === page && m.y <= y + 1)) hit = m;
     else break;
   }
-  return hit ? hit.line : null;
+  return hit;
+}
+
+export function lineAt(markers, page, y) {
+  return markerAt(markers, page, y)?.line ?? null;
 }

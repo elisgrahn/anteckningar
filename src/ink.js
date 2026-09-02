@@ -12,7 +12,7 @@ const SCENE_CLOSE = '-->';
 // Drawn pixels per point. Size on paper therefore follows what was actually
 // drawn: a small sketch stays small, a large one stays large, and two figures
 // drawn the same size on screen come out the same size.
-const SCALE = 2.0;
+export const SCALE = 2.0;
 
 // The width Canvas.jsx draws with, as a fallback for an empty scene.
 const WIDTH = 2.4;
@@ -42,10 +42,16 @@ export function pathFromOutline(outline) {
 // stroke comes out unevenly thick. getStroke handles a single point (a dot)
 // and two points (a capsule) on its own, so no special case is needed here.
 // last: true draws the outline all the way to the final point; without it the
-// stroke ends a few pixels behind the pen.
+// stroke ends a few pixels behind the pen, and the error grows with the size.
+//
+// Shared so that the two drawing surfaces and the saved file cannot drift apart
+// on these options.
+export function outlineOf(points, size) {
+  return getStroke(points, { size, thinning: 0, simulatePressure: false, last: true });
+}
+
 function pathFrom(points, width) {
-  const outline = getStroke(points, { size: width, thinning: 0, simulatePressure: false, last: true });
-  return pathFromOutline(outline);
+  return pathFromOutline(outlineOf(points, width));
 }
 
 function bounds(strokes) {
@@ -60,6 +66,27 @@ function bounds(strokes) {
   }
   if (!Number.isFinite(x0)) return { x0: 0, y0: 0, x1: 1, y1: 1 };
   return { x0, y0, x1, y1 };
+}
+
+/**
+ * Where the saved figure's top left corner sits, in the coordinates the strokes
+ * were drawn in. toSvg shifts everything so that this corner becomes (0, 0), so
+ * a caller that needs to place the figure on a page has to know it.
+ */
+export function figureOrigin(strokes) {
+  const b = bounds(strokes);
+  const pad = padding(strokes);
+  return { x: b.x0 - pad, y: b.y0 - pad };
+}
+
+/** The figure's size in points, matching what toSvg writes. */
+export function figureSize(strokes) {
+  const b = bounds(strokes);
+  const pad = padding(strokes);
+  return {
+    width: Math.round(b.x1 - b.x0 + pad * 2) / SCALE,
+    height: Math.round(b.y1 - b.y0 + pad * 2) / SCALE,
+  };
 }
 
 export function toSvg(strokes) {

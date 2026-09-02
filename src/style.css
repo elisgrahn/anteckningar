@@ -187,3 +187,28 @@ main > section { min-width: 0; overflow: hidden; }
 .cleanup li { display: flex; align-items: center; gap: 8px; padding: 4px 12px; }
 .cleanup li span { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cleanup li.label { color: #6b7280; padding-bottom: 2px; }
+
+/* Drawing on the rendered page. The output is a backdrop, not a text you
+   select from: the canvas takes every pointer, and the svg takes none. */
+.page-stack { position: relative; display: inline-block; }
+.right svg { user-select: none; -webkit-user-select: none; pointer-events: none; }
+.pagedraw { position: absolute; top: 0; left: 0; }
+.pagedraw canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Sticks to the top of the preview while the page scrolls under it. */
+.pagedraw-bar {
+  position: sticky;
+  position: -webkit-sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--lin);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
+  width: max-content;
+  margin: 4px;
+}

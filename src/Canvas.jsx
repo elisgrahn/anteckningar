@@ -1,29 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { getStroke } from 'perfect-freehand';
-import { toSvg, hitStroke, pathFromOutline } from './ink.js';
-import { recognise } from './shapes.js';
+import { toSvg, pathFromOutline, outlineOf } from './ink.js';
+import * as draw from './strokes.js';
 
-const COLORS = ['#16233d', '#b03030', '#1c6b45'];
-
-// The gesture: hold the tip still at the end of a stroke and it snaps to a shape.
-const HOLD_MS = 500;
-const STILL_PX = 4;
-const FLASH_MS = 1100;
-const HISTORY_MAX = 60;
-
-const SHAPE_NAMES = { line: 'line', circle: 'circle', rectangle: 'rectangle' };
-
-// Undo works on the whole stroke list rather than popping the last stroke, so
-// that both erasing and a snapped shape can be taken back.
-function remember(st, state) {
-  st.undo.push(state);
-  if (st.undo.length > HISTORY_MAX) st.undo.shift();
-}
+export const COLORS = ['#16233d', '#b03030', '#1c6b45'];
+export const PEN_WIDTH = 2.4;
+export const FLASH_MS = 1100;
 
 // The colour is a setting, not content, and belongs in the browser rather than
 // in the document. Can throw in private mode, hence try/catch.
 const COLOR_KEY = 'notes.penColor';
-const savedColor = () => {
+export const savedColor = () => {
   try {
     const c = localStorage.getItem(COLOR_KEY);
     return COLORS.includes(c) ? c : COLORS[0];
@@ -32,24 +18,40 @@ const savedColor = () => {
   }
 };
 
+export const rememberColor = (c) => {
+  try {
+    localStorage.setItem(COLOR_KEY, c);
+  } catch {
+    /* private mode, the colour lasts for this session only */
+  }
+};
+
+/** Paints a stroke list, plus a fading halo behind a shape that just snapped. */
+export function paint(ctx, width, height, strokes, flash) {
+  ctx.clearRect(0, 0, width, height);
+  if (flash) {
+    const left = (flash.until - performance.now()) / FLASH_MS;
+    if (left > 0) {
+      // The halo is drawn at eight times the line width, which is exactly why
+      // it needs the same outline options: without last: true it would end
+      // thirty pixels short of a snapped line.
+      ctx.fillStyle = `rgba(28, 107, 69, ${(0.25 * left).toFixed(3)})`;
+      ctx.fill(new Path2D(pathFromOutline(outlineOf(flash.points, flash.width * 8))));
+    }
+  }
+  for (const stroke of strokes) {
+    const outline = outlineOf(stroke.points, stroke.width);
+    if (!outline.length) continue;
+    ctx.fillStyle = stroke.color;
+    ctx.fill(new Path2D(pathFromOutline(outline)));
+  }
+}
+
 export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
   const boxRef = useRef(null);
   const canvasRef = useRef(null);
 
-  const s = useRef({
-    strokes: initialStrokes ? structuredClone(initialStrokes) : [],
-    current: null,
-    lastPenAt: 0,
-    dirty: true,
-    undo: [],
-    // Rest: where the tip last moved more than STILL_PX, and when.
-    restAt: null,
-    lastMovedAt: 0,
-    tested: false, // shape already tried at this rest position
-    locked: false, // the stroke has snapped and takes no more points
-    rawPoints: null, // the points actually drawn, for Cmd-Z
-    flash: null,
-  });
+  const s = useRef(draw.createState(initialStrokes));
 
   const [tool, setTool] = useState('pen');
   const [color, setColor] = useState(savedColor);
@@ -73,8 +75,6 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
       c.height = Math.round(r.height * dpr);
       const ctx = c.getContext('2d', { desynchronized: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
       s.current.dirty = true;
     };
     setup();
@@ -86,7 +86,7 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
   // The wrist must not be able to select or scroll while the pen is in the air
   useEffect(() => {
     const block = (e) => {
-      if (performance.now() - s.current.lastPenAt < 1500 && e.cancelable) e.preventDefault();
+      if (performance.now() - s.current.lastPenAt < draw.PALM_MS && e.cancelable) e.preventDefault();
     };
     document.addEventListener('touchstart', block, { passive: false });
     document.addEventListener('touchmove', block, { passive: false });
@@ -98,74 +98,29 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
 
   useEffect(() => {
     let raf;
-    const draw = () => {
+    const loop = () => {
       const st = s.current;
       const c = canvasRef.current;
 
-      // The test sits outside the dirty block: while the tip is still there are
-      // no pointermove events, and so nothing marks the drawing as dirty.
-      if (st.current && !st.locked && !st.tested && performance.now() - st.lastMovedAt > HOLD_MS) {
-        st.tested = true;
-        const hit = recognise(st.current.points);
-        if (hit) {
-          st.rawPoints = st.current.points;
-          st.current = { ...st.current, points: hit.points };
-          st.locked = true;
-          st.flash = { points: hit.points, width: st.current.width, until: performance.now() + FLASH_MS };
-          st.dirty = true;
-          setShape(SHAPE_NAMES[hit.kind]);
-          clearTimeout(st.shapeTimer);
-          st.shapeTimer = setTimeout(() => setShape(null), 1400);
-        }
+      const snapped = draw.trySnap(st);
+      if (snapped) {
+        st.flash = { points: st.current.points, width: st.current.width, until: performance.now() + FLASH_MS };
+        setShape(snapped);
+        clearTimeout(st.shapeTimer);
+        st.shapeTimer = setTimeout(() => setShape(null), 1400);
       }
 
       if (c && c.width && st.dirty) {
         const ctx = c.getContext('2d', { desynchronized: true });
         const dpr = window.devicePixelRatio || 1;
-        ctx.clearRect(0, 0, c.width / dpr, c.height / dpr);
-
-        // A flash behind the shape when it snaps, so you can see that it did.
-        if (st.flash) {
-          const left = (st.flash.until - performance.now()) / FLASH_MS;
-          if (left <= 0) st.flash = null;
-          else {
-            // last: true here too. Without it the halo ends before the stroke,
-            // and the error scales with the width: a snapped line has only two
-            // points, and at eight times the line width over thirty pixels are
-            // missing at the end.
-            const halo = getStroke(st.flash.points, {
-              size: st.flash.width * 8,
-              thinning: 0,
-              simulatePressure: false,
-              last: true,
-            });
-            ctx.fillStyle = `rgba(28, 107, 69, ${(0.25 * left).toFixed(3)})`;
-            ctx.fill(new Path2D(pathFromOutline(halo)));
-          }
-        }
-
-        const all = st.current ? [...st.strokes, st.current] : st.strokes;
-        for (const stroke of all) {
-          // thinning/simulatePressure off: fixed width (stroke.width), no
-          // guessed pressure. getStroke handles a single point (a dot) itself.
-          // last: true draws the outline all the way to the final point —
-          // without it the stroke ends a couple of pixels behind the pen.
-          const outline = getStroke(stroke.points, {
-            size: stroke.width,
-            thinning: 0,
-            simulatePressure: false,
-            last: true,
-          });
-          if (!outline.length) continue;
-          ctx.fillStyle = stroke.color;
-          ctx.fill(new Path2D(pathFromOutline(outline)));
-        }
+        if (st.flash && performance.now() > st.flash.until) st.flash = null;
+        paint(ctx, c.width / dpr, c.height / dpr, st.current ? [...st.strokes, st.current] : st.strokes, st.flash);
         // The flash is fading, so the next frame has to be drawn anyway.
         st.dirty = Boolean(st.flash);
       }
-      raf = requestAnimationFrame(draw);
+      raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(draw);
+    raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
 
@@ -174,96 +129,38 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
-  const allowed = (e) => {
-    const st = s.current;
-    if (e.pointerType === 'pen') {
-      st.lastPenAt = performance.now();
-      return true;
-    }
-    // A finger may draw only if no pen has been in use recently
-    return performance.now() - st.lastPenAt > 1500;
-  };
-
-  const erase = (x, y) => {
-    const st = s.current;
-    const left = st.strokes.filter((stroke) => !hitStroke(stroke, x, y, 14));
-    if (left.length === st.strokes.length) return;
-    // A whole erasing pass is one undo step, not one per stroke hit.
-    if (!st.erasedThisDrag) {
-      remember(st, st.strokes);
-      st.erasedThisDrag = true;
-    }
-    st.strokes = left;
-    st.dirty = true;
-    setUndoCount(st.undo.length);
-  };
-
   const onDown = (e) => {
-    if (!allowed(e)) return;
+    if (!draw.allowPointer(s.current, e.pointerType)) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = local(e);
-    const st = s.current;
     if (toolRef.current === 'eraser') {
-      st.erasedThisDrag = false;
-      return erase(p.x, p.y);
+      s.current.erasedThisDrag = false;
+      if (draw.eraseAt(s.current, p.x, p.y)) setUndoCount(s.current.undo.length);
+      return;
     }
-    st.current = { color: colorRef.current, width: 2.4, points: [p] };
-    st.restAt = p;
-    st.lastMovedAt = performance.now();
-    st.tested = false;
-    st.locked = false;
-    st.rawPoints = null;
-    st.dirty = true;
+    draw.beginStroke(s.current, p, colorRef.current, PEN_WIDTH);
   };
 
   const onMove = (e) => {
-    const st = s.current;
     if (e.buttons === 0) return;
-    if (!allowed(e)) return;
+    if (!draw.allowPointer(s.current, e.pointerType)) return;
     const evs = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
     if (toolRef.current === 'eraser') {
       for (const ev of evs) {
         const p = local(ev);
-        erase(p.x, p.y);
+        if (draw.eraseAt(s.current, p.x, p.y)) setUndoCount(s.current.undo.length);
       }
       return;
     }
-    if (!st.current || st.locked) return; // after a snap the shape stays put
-    for (const ev of evs) {
-      const p = local(ev);
-      st.current.points.push(p);
-      if (Math.hypot(p.x - st.restAt.x, p.y - st.restAt.y) > STILL_PX) {
-        st.restAt = p;
-        st.lastMovedAt = performance.now();
-        st.tested = false;
-      }
-    }
-    st.dirty = true;
+    draw.extendStroke(s.current, evs.map(local));
   };
 
   const onUp = () => {
-    const st = s.current;
-    if (!st.current) return;
-    const finished = st.current;
-    remember(st, st.strokes);
-    // If the stroke snapped, the drawn shape goes in as its own step, so the
-    // first Cmd-Z gives it back instead of deleting the stroke.
-    if (st.rawPoints) remember(st, [...st.strokes, { ...finished, points: st.rawPoints }]);
-    st.strokes = [...st.strokes, finished];
-    st.current = null;
-    st.rawPoints = null;
-    st.locked = false;
-    st.dirty = true;
-    setUndoCount(st.undo.length);
+    if (draw.endStroke(s.current)) setUndoCount(s.current.undo.length);
   };
 
   const undo = () => {
-    const st = s.current;
-    const previous = st.undo.pop();
-    if (!previous) return;
-    st.strokes = previous;
-    st.dirty = true;
-    setUndoCount(st.undo.length);
+    if (draw.undoStep(s.current)) setUndoCount(s.current.undo.length);
   };
 
   const done = () => {
@@ -305,35 +202,15 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
     <div className="overlay">
       <div className="overlay-bar">
         <strong>{name}</strong>
-        <div className="tools">
-          <button className={tool === 'pen' ? 'on' : ''} onClick={() => setTool('pen')}>
-            Pen
-          </button>
-          <button className={tool === 'eraser' ? 'on' : ''} onClick={() => setTool('eraser')}>
-            Eraser <kbd>E</kbd>
-          </button>
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              onClick={() => {
-                setColor(c);
-                setTool('pen');
-                try {
-                  localStorage.setItem(COLOR_KEY, c);
-                } catch {
-                  /* private mode, the colour lasts for this session only */
-                }
-              }}
-              className={'swatch' + (c === color ? ' on' : '')}
-              style={{ background: c }}
-              aria-label={'Colour ' + c}
-            />
-          ))}
-          <button onClick={undo} disabled={!undoCount}>
-            Undo
-          </button>
-          {shape && <span className="snap">{shape}</span>}
-        </div>
+        <Tools
+          tool={tool}
+          setTool={setTool}
+          color={color}
+          setColor={setColor}
+          undo={undo}
+          undoCount={undoCount}
+          shape={shape}
+        />
         <div className="right">
           <button onClick={onCancel}>Cancel <kbd>Esc</kbd></button>
           <button className="primary" onClick={done}>
@@ -352,6 +229,37 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
           style={{ touchAction: 'none' }}
         />
       </div>
+    </div>
+  );
+}
+
+/** Pen, eraser, colours and undo. Shared by both drawing surfaces. */
+export function Tools({ tool, setTool, color, setColor, undo, undoCount, shape }) {
+  return (
+    <div className="tools">
+      <button className={tool === 'pen' ? 'on' : ''} onClick={() => setTool('pen')}>
+        Pen
+      </button>
+      <button className={tool === 'eraser' ? 'on' : ''} onClick={() => setTool('eraser')}>
+        Eraser <kbd>E</kbd>
+      </button>
+      {COLORS.map((c) => (
+        <button
+          key={c}
+          onClick={() => {
+            setColor(c);
+            setTool('pen');
+            rememberColor(c);
+          }}
+          className={'swatch' + (c === color ? ' on' : '')}
+          style={{ background: c }}
+          aria-label={'Colour ' + c}
+        />
+      ))}
+      <button onClick={undo} disabled={!undoCount}>
+        Undo
+      </button>
+      {shape && <span className="snap">{shape}</span>}
     </div>
   );
 }
