@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { figureAtCursor, gåTill, iMatte, insertAtCursor, setDoc } from './Editor.jsx';
+import Editor, { figureAtCursor, gåTill, gåTillRad, iMatte, insertAtCursor, setDoc } from './Editor.jsx';
+import { radVid, sidaVid } from './markorer.js';
 import Symbolrad, { makron } from './Symbolrad.jsx';
 import Canvas from './Canvas.jsx';
 import { compile } from './typst.js';
@@ -19,6 +20,9 @@ export default function App() {
   const [source, setSource] = useState(null);
   const [figures, setFigures] = useState(new Map()); // "figurer/x.svg" -> Uint8Array
   const [svg, setSvg] = useState('');
+  // Var raderna hamnade i den senaste renderingen. Hör ihop med just den svg:n
+  // och byts ut samtidigt som den, annars pekar de fel efter ett tangenttryck.
+  const [utfall, setUtfall] = useState({ markörer: [], sidor: [] });
   const [diags, setDiags] = useState([]);
   const [status, setStatus] = useState('startar');
   const [drawing, setDrawing] = useState(null);
@@ -141,7 +145,10 @@ export default function App() {
       try {
         const res = await compile(source, figures);
         if (!alive) return;
-        if (res.svg) setSvg(res.svg);
+        if (res.svg) {
+          setSvg(res.svg);
+          setUtfall({ markörer: res.markörer, sidor: res.sidor });
+        }
         setDiags(res.diagnostics);
         setStatus(`${Math.round(res.ms)} ms`);
       } catch (e) {
@@ -165,6 +172,27 @@ export default function App() {
       setDrawing({ namn: api.nästaFigurnamn(sync.current.figurer), strokes: [], ny: true });
     }
   }, [figures]);
+
+  // Dubbelklick i utfallet går till raden i koden. Står raden på en figur
+  // öppnas den för redigering i stället — markören står ju redan rätt.
+  //
+  // Upplösningen är blocknivå, inte per tecken: klicket landar på styckets
+  // början, inte på ordet man träffade. Det är medvetet, inte ett fel.
+  const påUtfall = (e) => {
+    const svgEl = e.currentTarget.querySelector('svg');
+    const { markörer, sidor } = utfall;
+    if (!svgEl || !markörer.length || !sidor.length) return;
+    const r = svgEl.getBoundingClientRect();
+    const höjd = svgEl.viewBox?.baseVal?.height;
+    if (!r.height || !höjd) return;
+
+    const { sida, y } = sidaVid(sidor, ((e.clientY - r.top) / r.height) * höjd);
+    const rad = radVid(markörer, sida, y);
+    if (rad === null) return;
+
+    gåTillRad(viewRef.current, rad);
+    if (figureAtCursor(viewRef.current)) openCanvas();
+  };
 
   const finishCanvas = async (svgText) => {
     const { namn, ny } = drawing;
@@ -343,7 +371,7 @@ export default function App() {
             </ul>
           )}
         </section>
-        <section className="right" dangerouslySetInnerHTML={{ __html: svg }} />
+        <section className="right" onDoubleClick={påUtfall} dangerouslySetInnerHTML={{ __html: svg }} />
       </main>
 
       {drawing && (

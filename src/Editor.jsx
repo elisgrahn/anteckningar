@@ -87,6 +87,15 @@ export function figureAtCursor(view) {
   return m ? m[1] : null;
 }
 
+/** Flyttar markören till början av en rad och rullar dit. */
+export function gåTillRad(view, rad) {
+  if (!view) return;
+  const nr = Math.min(Math.max(rad + 1, 1), view.state.doc.lines);
+  const träffad = view.state.doc.line(nr);
+  view.dispatch({ selection: { anchor: träffad.from }, scrollIntoView: true });
+  view.focus();
+}
+
 /** Flyttar markören till en position i texten och rullar dit. */
 export function gåTill(view, pos) {
   if (!view) return;

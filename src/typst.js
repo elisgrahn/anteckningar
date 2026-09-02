@@ -3,6 +3,7 @@ import { createTypstRenderer } from '@myriaddreamin/typst.ts/renderer';
 import { loadFonts } from '@myriaddreamin/typst.ts';
 import compilerWasm from '@myriaddreamin/typst-ts-web-compiler/pkg/typst_ts_web_compiler_bg.wasm?url';
 import rendererWasm from '@myriaddreamin/typst-ts-renderer/pkg/typst_ts_renderer_bg.wasm?url';
+import { medMarkörer, tolka, ursprungsrad } from './markorer.js';
 
 // Typst har inga typsnitt inbyggda i wasm-modulen. Utan de här filerna
 // kompilerar ingenting som innehåller text, och matten kräver särskilt
@@ -44,8 +45,15 @@ async function start() {
 }
 
 /**
- * Kompilerar källan till en SVG-sträng.
+ * Kompilerar källan till en SVG-sträng, och tar samtidigt reda på var raderna
+ * hamnade på sidorna.
+ *
  * figures: Map<string, Uint8Array> med sökväg relativt roten, t.ex. "figurer/f-01.svg".
+ *
+ * Det som kompileras är en kopia med osynliga markörer, aldrig texten som
+ * ligger på disk. Positionerna kommer ur samma kompilering som artefakten, via
+ * runWithWorld — ett ensamt query() misslyckas med "document is not compiled",
+ * eftersom det tar en färsk snapshot utan att kompilera.
  */
 export async function compile(source, figures = new Map()) {
   const { compiler, renderer } = await boot();
@@ -54,18 +62,35 @@ export async function compile(source, figures = new Map()) {
   for (const [path, bytes] of figures) {
     compiler.mapShadow('/' + path.replace(/^\//, ''), bytes);
   }
-  compiler.addSource(MAIN, source);
+  const { text, karta } = medMarkörer(source);
+  compiler.addSource(MAIN, text);
 
   const started = performance.now();
-  const out = await compiler.compile({ mainFilePath: MAIN, format: 'vector' });
-  const diagnostics = (out?.diagnostics ?? []).map((d) => ({
+  const { artefakt, rå, diagnostik } = await compiler.runWithWorld({ mainFilePath: MAIN }, async (world) => {
+    const körd = await world.compile();
+    const vektor = await world.vector();
+    let rå = [];
+    try {
+      rå = await world.query({ selector: '<am>', field: 'value' });
+    } catch {
+      // Markörerna är en bonus. Går de förlorade ska dokumentet ändå visas.
+    }
+    return { artefakt: vektor?.result, rå, diagnostik: körd?.diagnostics ?? vektor?.diagnostics };
+  });
+
+  // Radnumren gäller kopian med markörer, alltså inte det användaren ser.
+  const diagnostics = (diagnostik ?? []).map((d) => ({
     severity: d.severity,
     message: d.message,
-    line: Number(String(d.range ?? '').split(':')[0]) || null,
+    line: ursprungsrad(karta, Number(String(d.range ?? '').split(':')[0]) || 0),
   }));
 
-  if (!out?.result) return { svg: null, diagnostics, ms: performance.now() - started };
+  if (!artefakt) return { svg: null, diagnostics, ms: performance.now() - started, markörer: [], sidor: [] };
 
-  const svg = await renderer.renderSvg({ artifactContent: out.result });
-  return { svg, diagnostics, ms: performance.now() - started };
+  const { svg, sidor } = await renderer.runWithSession({ artifactContent: artefakt }, async (session) => ({
+    sidor: session.retrievePagesInfo(),
+    svg: await renderer.renderSvg({ renderSession: session }),
+  }));
+
+  return { svg, diagnostics, ms: performance.now() - started, markörer: tolka(rå), sidor };
 }
