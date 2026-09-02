@@ -1,6 +1,6 @@
 
 
-#set page(width: 16cm, height: auto, margin: 1.4cm)
+#set page(paper: "a4")
 #set text(size: 11pt, lang: "sv")
 #set heading(numbering: "1.1")
 

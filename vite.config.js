@@ -10,7 +10,7 @@ const ROOT = path.resolve('dokument');
 const FIGURER = path.join(ROOT, 'figurer');
 const MAIN = path.join(ROOT, 'main.typ');
 
-const START = `#set page(width: 16cm, height: auto, margin: 1.4cm)
+const START = `#set page(paper: "a4")
 #set text(size: 11pt, lang: "sv")
 #set heading(numbering: "1.1")
 
