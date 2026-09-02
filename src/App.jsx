@@ -149,7 +149,10 @@ export default function App() {
       figuresRef.current = ny;
       setFigures(ny);
       if (ny) {
-        insertAtCursor(viewRef.current, `\n#figure(\n  image("figurer/${namn}"),\n  caption: [],\n)\n`);
+        // #image, inte #figure: det senare finns för numrering och
+        // korsreferenser och skriver "Figur 1:" i utfallet, vilket inte är
+        // vad man vill ha under en föreläsning.
+        insertAtCursor(viewRef.current, `\n#image("figurer/${namn}")\n`);
       }
       setDrawing(null);
     } catch (e) {
