@@ -4,9 +4,10 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Nu
 
-M0 (Grund: testsvit + CI) är genomförd och skickad som PR. Väntar på att CI
-går grönt på PR:en och, om inget annat väljs, på att den slås ihop automatiskt
-(M0 är inte ⛔, rör ingen invariant, och kräver inget manuellt test på riktig
+M0 (Grund: testsvit + CI) är genomförd:
+https://github.com/elisgrahn/anteckningar/pull/1. Väntar på att CI går grönt
+på PR:en och, om inget annat väljs, på att den slås ihop automatiskt (M0 är
+inte ⛔, rör ingen invariant, och kräver inget manuellt test på riktig
 hårdvara).
 
 ## Klart
@@ -18,8 +19,8 @@ hårdvara).
   Verifierat under arbetet: `allowPointer` gjordes tillfälligt trasig för
   pennhändelser, pennstrecktestet slog då rött, och ändringen rullades
   tillbaka innan commit — testet fångar alltså faktiskt en trasig
-  ritfunktion, inte bara en tom smoke test. PR: (fylls i av avsändaren av
-  PR:en).
+  ritfunktion, inte bara en tom smoke test.
+  PR: https://github.com/elisgrahn/anteckningar/pull/1
 
 ## Väntar på Elis
 
