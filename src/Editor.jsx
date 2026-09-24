@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { EditorView, keymap, highlightActiveLine } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, Prec } from '@codemirror/state';
-import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
-import { search, searchKeymap } from '@codemirror/search';
+import { basicSetup } from 'codemirror';
+import { search, openSearchPanel } from '@codemirror/search';
+import { autocompletion, acceptCompletion } from '@codemirror/autocomplete';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { typstLanguage } from './typstlang.js';
+import { typstLanguage, mathAt } from './typstlang.js';
+import { typstCompletions } from './complete.js';
 
 // CodeMirror rather than Monaco: Monaco is built for mouse and keyboard and
 // behaves badly with a touch screen and the iPad keyboard.
@@ -26,27 +28,45 @@ export default function Editor({ value, onChange, onDraw, onCursor, viewRef }) {
         // that is where the next figure goes unless the cursor was moved.
         selection: { anchor: value.length },
         extensions: [
-          history(),
-          highlightActiveLine(),
+          // The whole standard editor in one line: line numbers, undo history,
+          // multiple selections, bracket matching and closing, folding,
+          // autocompletion, search and the default key bindings. Everything
+          // below either adds to it or replaces a part of it on purpose.
+          basicSetup,
           typstLanguage,
           // Without syntaxHighlighting the tags get no colour at all — the
-          // language on its own is not enough.
+          // language on its own is not enough. basicSetup carries the same
+          // style as a fallback; stating it here keeps that from being an
+          // accident.
           syntaxHighlighting(defaultHighlightStyle),
-          search(),
+          // openSearchPanel installs the search field itself when it is
+          // missing, but then the configuration would be the default one.
+          search({ top: true }),
+          // Our own sources rather than the language's: there are five of them,
+          // and language data holds one.
+          autocompletion({ override: typstCompletions }),
           EditorView.lineWrapping,
           Prec.high(
             keymap.of([
               {
-                key: 'Mod-d',
+                // Mod-d belongs to selectNextOccurrence in a code editor, so
+                // drawing moved out of the way. The button in the header says
+                // the same thing, which is what the iPad goes by.
+                key: 'Mod-i',
                 preventDefault: true,
                 run: () => {
                   latest.current.onDraw();
                   return true;
                 },
               },
+              // What VS Code uses for replace. The panel is the same one Mod-f
+              // opens — it has the replace fields already.
+              { key: 'Mod-h', preventDefault: true, run: openSearchPanel },
+              // Returns false when no completion is open, so Tab still does
+              // what it did. Snippet fields bind Tab above this one.
+              { key: 'Tab', run: acceptCompletion },
             ]),
           ),
-          keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) latest.current.onChange(u.state.doc.toString());
             // On a figure line the button changes its name to Edit.
@@ -54,8 +74,14 @@ export default function Editor({ value, onChange, onDraw, onCursor, viewRef }) {
           }),
           EditorView.theme({
             '&': { height: '100%', fontSize: '15px' },
-            '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', padding: '12px' },
+            '.cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', padding: '12px 12px 12px 6px' },
             '.cm-scroller': { overflow: 'auto' },
+            // The line numbers come with basicSetup. Grey on the same white as
+            // the editor, so the gutter reads as a margin and not as a second
+            // column.
+            '.cm-gutters': { background: 'transparent', border: 'none', color: '#b3b9c4' },
+            '.cm-activeLineGutter': { background: 'transparent', color: '#6b7280' },
+            '.cm-lineNumbers .cm-gutterElement': { padding: '0 8px 0 12px' },
           }),
         ],
       }),
@@ -217,6 +243,5 @@ export function deleteLine(view, match) {
  *  as `lg` or as `#lg`, since math mode uses the name bare. */
 export function inMath(view) {
   if (!view) return false;
-  const before = view.state.doc.sliceString(0, view.state.selection.main.head);
-  return (before.match(/\$/g) || []).length % 2 === 1;
+  return mathAt(view.state.doc, view.state.selection.main.head);
 }

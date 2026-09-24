@@ -28,14 +28,32 @@ hemskärmen så körs den i helskärm utan adressfält.
 ## Vad som finns
 
 - Editor och preview sida vid sida, med kod- respektive utfallsläge för smala skärmar
-- Cmd-D öppnar ritläget i helskärm. Står markören på en rad som redan har en
+- Cmd-I öppnar ritläget i helskärm. Står markören på en rad som redan har en
   figur öppnas den figuren för påfyllning i stället för att en ny skapas
+  (Cmd-D är upptaget av editorns "markera nästa förekomst")
 - Klar sparar figuren och lägger `#figure(image(...))` vid markören som en
   enda ångra-bar ändring, och lämnar tillbaka fokus till editorn
 - Figurer numreras automatiskt, `figures/f-01.svg`. Ingen namnruta
 - Handlovsskydd: fingret ritar bara om pennan varit borta i mer än 1,5 sekunder,
   och all textmarkering och rullning blockeras medan pennan är i bruk
 - Sparas hela tiden, aldrig med en knapp
+
+## Editorn
+
+Vanliga kodeditorsvanor, de flesta rakt ur CodeMirror:
+
+- Radnummer i vänsterkanten, flera markörer (Cmd-D för nästa förekomst,
+  Cmd-Shift-L för alla), matchande parenteser, vikning
+- Cmd-F söker och ersätter i samma panel, Cmd-H öppnar den likaså, F3 eller
+  Cmd-G för nästa träff
+- `(`, `[`, `"` och `$` sluter sig själva. Skriver du sluttecknet ändå hoppar
+  markören förbi det i stället för att lägga till ett extra
+- Förslag med Tab: ord ur dokumentet, Typst-kommandon som `#figure` med
+  hoppbara fält, matematiska symbolnamn i matteläge, och dokumentets egna
+  `#let`-makron
+- **Substitution**: har du skrivit `$v(t) = 2 g t$` någonstans erbjuds `2 g t`
+  när du skriver `v(t)` i ett senare matteblock. Aldrig automatiskt — det är ett
+  räknesteg och väljs ur listan
 
 ## Verktygsbyte
 

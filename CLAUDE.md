@@ -135,7 +135,8 @@ scenformatet och `hitStroke` är opåverkade.
 sista draget. Ett snäpp lägger den ritade formen som ett eget steg, så första
 Cmd-Z ger tillbaka den innan andra raderar draget.
 
-`Cmd-D` öppnar ritläget. Står markören på en rad som redan matchar
+`Cmd-I` öppnar ritläget — `Cmd-D` är `selectNextOccurrence` i editorn. Står
+markören på en rad som redan matchar
 `image("...svg")` öppnas den figuren för påfyllning; annars skapas nästa
 lediga `f-NN.svg`. Done sparar figuren och infogar `#image("figures/f-NN.svg")`
 som **en enda** ångra-bar ändring, med fokus tillbaka i editorn.
@@ -245,6 +246,20 @@ CodeMirror 6, inte Monaco — Monaco beter sig illa med pekskärm och
 iPad-tangentbord. Editorn skapas en gång och äger sedan texten; ändringar
 utifrån (poll från andra enheten) går genom `setDoc`, som behåller markören.
 
+Tilläggen är `basicSetup` från `codemirror`-paketet, inte en handplockad lista:
+radnummer, ångra, flera markörer, matchande och självstängande parenteser,
+vikning, sökning och standardtangenterna på en gång. Det som ligger efter den i
+listan lägger till eller ersätter en del av den med flit — språket,
+`search({ top: true })`, `autocompletion({ override })` och radbrytningen.
+
+`Mod-i` för ritläget är en följd av bytet: `basicSetup` ger `Mod-d` till
+`selectNextOccurrence`, och `Prec.high` runt ritläget vann över den. Genvägen
+står på knappen i huvudet, som är den iPaden går efter. `Mod-h` är ett alias
+till sökpanelen, för det är det VS Code använder för ersätt — panelen är samma
+som `Mod-f` öppnar och har ersättningsfälten. `Tab` tar emot ett förslag och
+returnerar `false` när inget är öppet, så den faller igenom som förut;
+snippetfältens egen `Tab` ligger på `Prec.highest` och vinner över den.
+
 Syntaxfärgningen ligger i `src/typstlang.js`, en `StreamLanguage` utan
 tree-sitter. Tokennamnen är **strängar** (`variableName.function`), inte
 `Tag`-objekt — CodeMirror slår upp dem i sin egen tabell och delar på punkt.
@@ -253,6 +268,40 @@ alls, språket ensamt räcker inte.
 
 Mount-effekten har `[]` som deps, så props når den genom refen `latest` — nya
 callbacks måste läggas där, annars stänger de om första renderns värden.
+
+#### Förslagen (`src/complete.js`)
+
+Fem källor, alla härledda ur dokumentet självt eller ur en kort handskriven
+lista. De skickas in med `autocompletion({ override })` och inte som
+språkdata, eftersom språkdatans `autocomplete` rymmer **en** källa och en array
+där tolkas som en lista med förslag, inte som en lista med källor.
+
+- Typst-kommandon (`#figure`, `#image`, `#let`, `#set`, `#place`) som snippets,
+  bara utanför matte.
+- Matematiska symbolnamn, bara i matte. De som tar argument är snippets.
+- Dokumentets egna `#let`-makron, via samma `macros()` som symbolraden. Bara
+  namnet i matteläge, med `#` utanför — så vill Typst ha dem.
+- `completeAnyWord`, ord som redan står i dokumentet.
+- **Substitution**: vad det som står under markören har sagts vara lika med
+  tidigare. Tabellen byggs av `lhs = rhs` funna mellan dollartecken, plus varje
+  `namn(argument)` så att `v` föreslår `v(t)`. Resultatet har `filter: false`,
+  för förslaget är vad texten ska *bli* — CodeMirrors egen filtrering skulle
+  kasta `2g` som icke-träff på `v(t)`. Aldrig automatisk: att substituera är ett
+  räknesteg, inte en stavningsrättelse, så det väljs ur listan.
+
+Tabellerna byggs om bara när texten ändrats (`cache` i filen) — en källa körs
+vid varje tangenttryck och läser hela dokumentet.
+
+Matteläget är `mathAt()` i `typstlang.js`: paritetsräkning av `$` från styckets
+början, samma regel som tokenizern följer, där en blank rad avslutar matte som
+lämnats öppen. Lokalt, så ett ensamt `$` längre upp inte vänder varje rad efter
+sig. `inMath()` i `Editor.jsx` är numera samma funktion.
+
+`$` sluter sig själv genom språkdata (`closeBrackets: { brackets: [...] }`) —
+det är enda vägen, för ett dollartecken är ingen parentes för CodeMirror. Ett
+par per tryck: `$$` i Typst är inte LaTeX:s blockmatte, och andra trycket
+hoppar förbi det tecken som redan står där. `'` är borttaget ur listan med
+flit; det här är svensk löptext, inte kod.
 
 ## Medvetet utelämnat
 

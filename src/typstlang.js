@@ -101,4 +101,28 @@ export const typstLanguage = StreamLanguage.define({
     // A paragraph break reasonably also ends multi-line math left unclosed.
     state.inMath = false;
   },
+  languageData: {
+    // closeBrackets reads its brackets from language data, which is the only
+    // way to get $ closed — a dollar sign is no bracket to CodeMirror. One
+    // pair per press: $$ in Typst is not LaTeX's block math, and typing the
+    // second $ skips past the one already there rather than adding a third.
+    //
+    // ' is left out on purpose: this is prose in Swedish, not code, and an
+    // apostrophe that closes itself is a nuisance.
+    closeBrackets: { brackets: ['(', '[', '{', '"', '$'] },
+  },
 });
+
+/**
+ * Is the position inside math? A parity count of $ from the start of the
+ * paragraph — the same rule the tokenizer above follows, where a blank line
+ * ends math left unclosed. Local, so a stray $ elsewhere in the document does
+ * not flip every line after it.
+ */
+export function mathAt(doc, pos) {
+  const line = doc.lineAt(pos);
+  let first = line.number;
+  while (first > 1 && doc.line(first - 1).text.trim() !== '') first--;
+  const before = doc.sliceString(doc.line(first).from, pos);
+  return (before.match(/\$/g) || []).length % 2 === 1;
+}

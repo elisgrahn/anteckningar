@@ -372,7 +372,8 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && !drawing) {
+      // Mod-i, not Mod-d: Mod-d is selectNextOccurrence in the editor.
+      if ((e.metaKey || e.ctrlKey) && e.key === 'i' && !drawing) {
         e.preventDefault();
         openCanvas();
       }
@@ -454,7 +455,7 @@ export default function App() {
       <header>
         <strong>Notes</strong>
         <button onClick={openCanvas}>
-          {onFigure ? 'Edit' : 'Draw'} <kbd>⌘D</kbd>
+          {onFigure ? 'Edit' : 'Draw'} <kbd>⌘I</kbd>
         </button>
         {unused.length > 0 && (
           <button className={showCleanup ? 'on' : ''} onClick={() => setShowCleanup((v) => !v)}>
