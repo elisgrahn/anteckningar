@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Filen beskriver appen som den är. Vart den ska, invarianterna och arbetssättet
+står i `VISION.md`; läget just nu i `STATUS.md`. Säger de emot varandra gäller
+`VISION.md`.
+
 ## Språk
 
 **Koden är engelsk**: identifierare, kommentarer och all synlig UI-text.
@@ -47,7 +51,8 @@ separat serverprocess och inget fil-API i en byggd `dist/`. Fyra rutter:
 riktiga filer på maskinen som kör servern, versionshanterbara och kompilerbara
 med vanliga `typst compile`. Klienterna (dator, iPad på samma nät) är kopior
 utan egen sanning. `document/` skapas och fylls med ett startdokument av
-`ensure()` om det saknas.
+`ensure()` om det saknas. Från och med M1 i `VISION.md` ersätts det här av
+local-first (invariant 3).
 
 **Synk är poll + debounce, sista skrivningen vinner.** `App.jsx` håller hela
 modellen i `sync.current = { mtime, saved, figures, writing, loaded }`;
@@ -58,7 +63,7 @@ misslyckad första hämtning faller tillbaka på tom editor (invariant 6), och u
 flaggan skrev autospara den tomheten till disk. Sparar
 400 ms efter senaste tangenttryck, pollar var 1500 ms, kompilerar 220 ms efter
 ändring. `src/server.js` är klientsidans fyra fetch-funktioner — det är de som
-byts ut mot Supabase, inget annat.
+byts ut när synken byggs om (Yjs, se `VISION.md`), inget annat.
 
 **Typst kompileras i webbläsaren** via typst.ts (`src/typst.js`). Wasm-modulen
 är ~28 MB (~11 MB över nätet), initieras en gång bakom `boot()`. Figurer skickas
@@ -305,9 +310,10 @@ flit; det här är svensk löptext, inte kod.
 
 ## Medvetet utelämnat
 
-Offline/service worker, fjärråtkomst (`tailscale serve 5173` när det behövs),
+Fjärråtkomst (`tailscale serve 5173` när det behövs),
 åtkomstskydd (vem som helst på nätet kan skriva till API:t), flera dokument och
-filträd, markeringsverktyg i ritläget.
+filträd, markeringsverktyg i ritläget. Offline och service worker saknas än
+så länge men är planerade (M5 i `VISION.md`).
 
 ## Att vara försiktig med
 
