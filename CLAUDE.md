@@ -32,10 +32,30 @@ npm run dev          # vite --host, fil-API:t ingår
 npm run dev:https    # samma, med självsignerat cert (basic-ssl) för iPad
 npm run build        # bara klienten — ingen server, inget fil-API
 npm run preview      # serverar dist/ och kör fil-API:t igen
+npm test             # playwright test — startar dev-servern själv
 ```
 
-Inga tester, ingen linter, inget typsystem. Verifiering sker genom att köra
+Ingen linter, inget typsystem. Verifiering av UI sker i övrigt genom att köra
 appen och titta på förhandsvisningen.
+
+**Testsviten** (`e2e/`, `playwright.config.js`) är två saker: `typst-compile.spec.js`
+kör riktig `typst compile document/main.typ` (invariant 1, mätt — inte antaget),
+och `draw.spec.js` ritar med ett simulerat pennstreck och kontrollerar att en
+figur infogas. `npm test` startar sin egen vite-server på port 5273 mot en
+tom mapp i `os.tmpdir()`, aldrig mot `document/` — se `ANTECKNINGAR_DOCUMENT_DIR`
+i `vite.config.js`, annars skulle testkörningen skräpa ner de riktiga
+anteckningarna med provfigurer.
+
+Pennstrecket i `e2e/pen.js` går via CDP (`Input.dispatchMouseEvent` med
+`pointerType: 'pen'`), inte `locator.dispatchEvent()`. Ett odispatchat/
+otillförlitligt event (`isTrusted: false`) ger tom lista från
+`PointerEvent.getCoalescedEvents()` per spec, och `onMove` i `Canvas.jsx` läser
+punkterna just därifrån — ett vanligt dispatchat event ritar alltså ingenting,
+tyst.
+
+CI (`.github/workflows/ci.yml`) kör `npm run build` och `npm test` på varje PR
+och laddar ner både `typst` och Playwrights Chromium själv — se STATUS.md
+"Lärdomar" för molnmiljöns motsvarande setup-skript.
 
 ## Arkitektur
 

@@ -6,7 +6,10 @@ import path from 'node:path';
 
 // The files live on real disk in document/, owned by the machine running the
 // server. The clients hold no truth of their own, only a copy.
-const ROOT = path.resolve('document');
+//
+// ANTECKNINGAR_DOCUMENT_DIR lets the e2e suite point this at a throwaway
+// folder instead, so a pen-simulation test never writes into the real notes.
+const ROOT = path.resolve(process.env.ANTECKNINGAR_DOCUMENT_DIR || 'document');
 const FIGURES = path.join(ROOT, 'figures');
 const MAIN = path.join(ROOT, 'main.typ');
 

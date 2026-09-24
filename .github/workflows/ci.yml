@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # No apt package ships typst; the upstream binary release is the
+      # supported way to get it. Pinning a version here would drift from
+      # whatever a contributor has locally — "latest" mirrors that.
+      - name: Install typst
+        run: |
+          curl -sSL -o /tmp/typst.tar.xz \
+            https://github.com/typst/typst/releases/latest/download/typst-x86_64-unknown-linux-musl.tar.xz
+          tar xf /tmp/typst.tar.xz -C /tmp
+          sudo install -m 755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
+          typst --version
+
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run build
+
+      - run: npm test
