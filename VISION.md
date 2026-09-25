@@ -33,6 +33,20 @@ föreläsningar. Det kräver att editorn känns lika bra som typst.app, att inge
 försvinner, att flera kurser går att hålla isär och att handskrivna sidor
 fungerar.
 
+## Måttstocken
+
+Utan appen antecknar Elis i typst.app och ritar figurer i GoodNotes,
+markerar området, tar en skärmbild, kopierar och klistrar in i typst.app,
+som laddar upp filen och skriver `#image` automatiskt. Varje funktion som
+rör figurer ska vara snabbare än den omvägen, annars används den inte.
+
+Omvägens svagheter, som appen ska lösa:
+
+- Att uppdatera en figur när föreläsaren bygger vidare kräver hela
+  omvägen igen.
+- Bilden blir sidbred oavsett hur stor figuren är.
+- Det går inte att rita direkt på utfallet.
+
 ## Invarianter
 
 Brytas bara efter uttryckligt godkännande från Elis.
