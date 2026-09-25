@@ -18,6 +18,7 @@ import PageDraw from './PageDraw.jsx';
 import { compile } from './typst.js';
 import { figureOrigin, fromSvg, inkTopLeft, toSvg, SCALE } from './ink.js';
 import * as api from './server.js';
+import * as queue from './queue.js';
 
 const POLL_MS = 1500;
 
@@ -49,6 +50,11 @@ export default function App() {
   const [waiting, setWaiting] = useState(false);
   const [showOutline, setShowOutline] = useState(false);
   const [showCleanup, setShowCleanup] = useState(false);
+  // Writes waiting in the local queue because the server couldn't be reached
+  // when they were made — see src/queue.js. Read back after every enqueue and
+  // dequeue rather than tracked separately, so it can never drift from what
+  // IndexedDB actually holds.
+  const [queued, setQueued] = useState(0);
 
   // What the server last said, and what we last sent there. The difference
   // between the two is the whole sync model.
@@ -82,6 +88,38 @@ export default function App() {
     }
     sync.current.figures = list;
     return map;
+  }, []);
+
+  // Send off whatever the queue is holding — writes that failed while offline
+  // (see the save effects below and src/queue.js). Only called after a poll
+  // that actually reached the server, so it never even tries while offline.
+  const flushQueue = useCallback(async () => {
+    for (const [key, op] of await queue.allQueued()) {
+      try {
+        if (op.type === 'doc') {
+          const r = await api.saveDoc(op.body, op.baseMtime);
+          sync.current.mtime = r.mtime;
+          if (op.body === sourceRef.current) sync.current.saved = op.body;
+          if (r.conflict) setStatus('conflict: saved as ' + r.conflictFile);
+          await queue.dequeue(key);
+        } else if (op.type === 'figure') {
+          const r = await api.saveFigure(op.name, op.body, op.baseMtime);
+          sync.current.figures = { ...sync.current.figures, [op.name]: r.mtime };
+          if (r.conflict) setStatus('conflict: saved as ' + r.conflictFile);
+          await queue.dequeue(key);
+        } else if (op.type === 'delete-figure') {
+          await api.deleteFigure(op.name);
+          await queue.dequeue(key);
+        }
+      } catch (e) {
+        // Still offline, or the server just went away again mid-flush: leave
+        // it queued and stop for this round rather than lose the order or
+        // hammer a server that isn't answering. The next poll tries again.
+        setStatus(api.isOffline(e) ? 'offline, retrying' : 'not saving: ' + (e.message || e));
+        break;
+      }
+    }
+    setQueued((await queue.allQueued()).length);
   }, []);
 
   // Fetch the state, both at start and on every poll
@@ -118,8 +156,12 @@ export default function App() {
         figuresRef.current = next;
         setFigures(next);
       }
+
+      // Reaching this point means the server just answered, so this is exactly
+      // the moment to try sending off anything the queue is still holding.
+      await flushQueue();
     },
-    [loadFigures],
+    [loadFigures, flushQueue],
   );
 
   sourceRef.current = source;
@@ -145,12 +187,24 @@ export default function App() {
     if (!sync.current.loaded || source === null || source === sync.current.saved) return;
     const id = setTimeout(async () => {
       sync.current.writing = true;
+      const baseMtime = sync.current.mtime;
       try {
-        const r = await api.saveDoc(source);
+        const r = await api.saveDoc(source, baseMtime);
         sync.current.mtime = r.mtime;
         sync.current.saved = source;
+        await queue.dequeue(queue.docKey());
+        if (r.conflict) setStatus('conflict: saved as ' + r.conflictFile);
       } catch (e) {
-        setStatus('not saving: ' + (e.message || e));
+        if (api.isOffline(e)) {
+          // sync.current.saved stays as it was: the text on screen is ahead
+          // of what the server has, and a poll must keep treating that as our
+          // own unsaved edit rather than overwrite it with the stale version.
+          await queue.enqueue(queue.docKey(), { type: 'doc', body: source, baseMtime });
+          setQueued((await queue.allQueued()).length);
+          setStatus('offline: queued');
+        } else {
+          setStatus('not saving: ' + (e.message || e));
+        }
       } finally {
         sync.current.writing = false;
       }
@@ -291,16 +345,32 @@ export default function App() {
     }
     const { name } = onPage.current;
     onPage.current.timer = setTimeout(async () => {
-      try {
-        const svgText = toSvg(data.strokes);
-        const r = await api.saveFigure(name, svgText);
-        sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
+      const svgText = toSvg(data.strokes);
+      const baseMtime = sync.current.figures[name];
+      const applyLocal = () => {
         const next = new Map(figuresRef.current).set(FIG_DIR + name, api.toBytes(svgText));
         figuresRef.current = next;
         setFigures(next);
+      };
+      try {
+        const r = await api.saveFigure(name, svgText, baseMtime);
+        sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
+        applyLocal();
+        await queue.dequeue(queue.figureKey(name));
         await placeFigure(name, data.strokes);
+        if (r.conflict) setStatus('conflict: saved as ' + r.conflictFile);
       } catch (e) {
-        setStatus('figure not saved: ' + (e.message || e));
+        if (api.isOffline(e)) {
+          await queue.enqueue(queue.figureKey(name), { type: 'figure', name, body: svgText, baseMtime });
+          setQueued((await queue.allQueued()).length);
+          // The stroke stays visible and anchored — only the copy on disk is
+          // missing until the queue flushes.
+          applyLocal();
+          await placeFigure(name, data.strokes);
+          setStatus('offline: queued');
+        } else {
+          setStatus('figure not saved: ' + (e.message || e));
+        }
       }
     }, 400);
   };
@@ -344,9 +414,8 @@ export default function App() {
 
   const finishCanvas = async (svgText) => {
     const { name, isNew, place, origin } = drawing;
-    try {
-      const r = await api.saveFigure(name, svgText);
-      sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
+    const baseMtime = sync.current.figures[name];
+    const applyLocal = () => {
       const next = new Map(figuresRef.current).set(FIG_DIR + name, api.toBytes(svgText));
       figuresRef.current = next;
       setFigures(next);
@@ -365,8 +434,22 @@ export default function App() {
         upsertLine(viewRef.current, `image("${place.path}")`, placeCode(place.path, dx, dy), place.line);
       }
       setDrawing(null);
+    };
+    try {
+      const r = await api.saveFigure(name, svgText, baseMtime);
+      sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
+      applyLocal();
+      await queue.dequeue(queue.figureKey(name));
+      if (r.conflict) setStatus('conflict: saved as ' + r.conflictFile);
     } catch (e) {
-      setStatus('figure not saved: ' + (e.message || e));
+      if (api.isOffline(e)) {
+        await queue.enqueue(queue.figureKey(name), { type: 'figure', name, body: svgText, baseMtime });
+        setQueued((await queue.allQueued()).length);
+        applyLocal();
+        setStatus('offline: queued');
+      } else {
+        setStatus('figure not saved: ' + (e.message || e));
+      }
     }
   };
 
@@ -420,16 +503,23 @@ export default function App() {
 
   const remove = async (name) => {
     if (!window.confirm(`Delete ${name}? The file disappears from disk.`)) return;
+    const left = new Map(figuresRef.current);
+    left.delete(FIG_DIR + name);
+    figuresRef.current = left;
+    setFigures(left);
+    const { [name]: _gone, ...rest } = sync.current.figures;
+    sync.current.figures = rest;
+    await queue.dequeue(queue.figureKey(name)); // a not-yet-sent save for it is moot now
     try {
       await api.deleteFigure(name);
-      const left = new Map(figuresRef.current);
-      left.delete(FIG_DIR + name);
-      figuresRef.current = left;
-      setFigures(left);
-      const { [name]: _gone, ...rest } = sync.current.figures;
-      sync.current.figures = rest;
     } catch (e) {
-      setStatus('could not delete: ' + (e.message || e));
+      if (api.isOffline(e)) {
+        await queue.enqueue(queue.figureKey(name), { type: 'delete-figure', name });
+        setQueued((await queue.allQueued()).length);
+        setStatus('offline: queued');
+      } else {
+        setStatus('could not delete: ' + (e.message || e));
+      }
     }
   };
 
@@ -479,8 +569,14 @@ export default function App() {
             </button>
           ))}
         </div>
-        <span className={'status' + (errors.length ? ' bad' : waiting ? ' waiting' : '')}>
-          {errors.length ? `${errors.length} errors` : waiting ? 'changes waiting' : status}
+        <span className={'status' + (errors.length ? ' bad' : waiting || queued > 0 ? ' waiting' : '')}>
+          {errors.length
+            ? `${errors.length} errors`
+            : waiting
+              ? 'changes waiting'
+              : queued > 0
+                ? `${queued} not synced yet`
+                : status}
         </span>
       </header>
 
