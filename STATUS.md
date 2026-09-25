@@ -4,12 +4,15 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Nu
 
-M0 och M4 är klara och sammanslagna. M1 och M2 väntar båda på Elis (se
-nedan) — M2 är ⛔ så M3 kan inte börja förrän Elis svarat på designförslaget.
-Spiken för M2 är klar (se Klart): frågan till Elis nu är bara om den
-återstående, mindre patchen är värd jobbet. Näst på tur medan det väntar:
-M7 (handskrivna sidor) eller M8 (penna på datorn), som båda saknar
-beroenden till M1–M3 (M6 är också ⛔ och väntar på Elis).
+M0 och M4 är klara och sammanslagna. M1 avfärdat av Elis — testsviten och
+git-historiken räcker som skyddsnät, ingen Vercel-koppling görs (se Klart).
+M2 (⛔) pågår: Elis bekräftade att `sourcemap.js`-hackets begränsningar
+faktiskt stört honom, om än i begränsad mängd, och godkände den avgränsade
+patchen. Inget väntar på ett svar just nu — nästa steg är ett konkret
+experiment (se Klart, M2-spiken): byta `src/typst.js` till den inkrementella
+kompileringsvägen + `setAttachDebugInfo(true)` och se om spannet som kommer
+tillbaka redan går att slå upp till rad/kolumn utan en Rust-patch. M3 väntar
+på att M2 blir klar.
 
 ## Klart
 
@@ -35,28 +38,32 @@ beroenden till M1–M3 (M6 är också ⛔ och väntar på Elis).
   samma bas-`mtime` direkt mot fil-API:t och kontrollerar att den andra
   hamnar i en konfliktfil på disk i stället för att skriva över den första.
   Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/4
-- **M2, spiken.** Läst källkoden på `Myriad-Dreamin/typst.ts` (den
-  `typst-ts-web-compiler`/`typst-ts-renderer` vi redan beror på, v0.7.0) via
-  GitHubs kodsökning, inte gissat. Resultat: `RenderSession.getSourceLoc(path)`
-  och `data-span`-attributet på renderade SVG-element är **redan kompilerade
-  in** i vår nuvarande wasm-fil — ingen ombyggnad krävs för att gå från ett
-  klickat element till ett Typst-spann. Det spannet är dock ett opakt hex-tal;
-  att slå upp vilken rad/kolumn det pekar på saknar en JS-vänd funktion i vår
-  version av `typst-ts-web-compiler` (bara `query()` finns). M2 krymper alltså
-  till en riktad patch av just den ena funktionen + en egen ombyggd wasm-fil
-  för web-compilern, inte en hel `typst-ide`-integration. Detaljer och länkar
-  till exakta rader: https://github.com/elisgrahn/anteckningar/issues/3
+- **M1, avfärdat.** Elis: testsviten + git-historiken räcker, han behöver
+  inte kunna kolla en PR från iPaden före sammanslagning. Ingen
+  Vercel-koppling görs. https://github.com/elisgrahn/anteckningar/issues/2
+  (stängd, "not planned").
+- **M2, spiken (två omgångar).** Läst källkoden på `Myriad-Dreamin/typst.ts`
+  (den `typst-ts-web-compiler`/`typst-ts-renderer` vi redan beror på, v0.7.0)
+  via GitHubs kodsökning och en lokal klon, inte gissat. Första fyndet:
+  `RenderSession.getSourceLoc(path)`/`data-span`-attributet på renderade
+  SVG-element är redan kompilerade in i vår nuvarande wasm-fil — ingen
+  ombyggnad krävs för att gå från ett klickat element till ett Typst-spann.
+  Andra fyndet, ännu bättre: den data som idag är tom (`page_source_mapping`,
+  det CLAUDE.md kallar tomt `page_sources`) fylls bara i om
+  `compiler.setAttachDebugInfo(true)` slås på — också en redan skickad
+  JS-metod, men bara på den **inkrementella** kompileringsvägen, som
+  `src/typst.js` inte använder idag (vi kör ett engångsanrop via
+  `runWithWorld`/`world.vector()`). Möjligen krävs alltså ingen Rust-patch
+  alls. Kvar att verifiera: om spann-id:t den vägen ger faktiskt går att slå
+  upp till rad/kolumn med en redan exponerad funktion, eller om det (som
+  `data-tid` redan är) bara är ett innehållsfingeravtryck som kräver den lilla
+  patchen från första spiken (`resolve_source_span` i
+  `crates/reflexo-typst/src/error.rs`, identifierad men inte skriven).
+  Detaljer: https://github.com/elisgrahn/anteckningar/issues/3
 
 ## Väntar på Elis
 
-- **M1 (beslut, blockerar inte annat).** Elis har redan Vercel; näst steg är
-  att han kopplar in det på repot (Settings på vercel.com, ingen hemlighet
-  att klistra in här) — inget en agent kan göra åt honom.
-  https://github.com/elisgrahn/anteckningar/issues/2
-- **M2 (⛔, blockerar M3).** Efter spiken (se ovan): är den kvarvarande
-  patchen av `typst-ts-web-compiler` värd jobbet, givet att `sourcemap.js`
-  fungerar och inte blockerar något annat just nu?
-  https://github.com/elisgrahn/anteckningar/issues/3
+Inget just nu.
 
 ## Lärdomar
 
