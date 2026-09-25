@@ -108,6 +108,16 @@ sidbrytningar. Zoom i förhandsvisningen tills det visar sig behövas.
   väntar på honom.
 - **Hellre liten och klar än stor och halvfärdig.** Dela upp en milstolpe i
   PR:er som var för sig lämnar appen fungerande.
+- **Kolla issues i början av varje session.** Issues med etiketten `prio`
+  går före milstolparna. Issues med etiketten `observation`, och andra
+  issues från Elis, är råmaterial: omvandla dem till konkreta issues,
+  prioritera in dem, svara kort vad som blev av dem och stäng dem.
+- **Lös miljöproblem själv.** Kan något inte verifieras i molnmiljön är
+  det teamets problem att ändra miljön eller testupplägget, inte att
+  skicka verifieringen till Elis. Kräver lösningen hans behörighet,
+  ställ ett beslut.
+- **Städa efter dig.** Radera grenen när en PR är sammanslagen eller
+  stängd.
 
 ## Hur Elis involveras
 
