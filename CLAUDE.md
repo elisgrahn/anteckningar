@@ -395,3 +395,11 @@ filträd, markeringsverktyg i ritläget. Kö vid nätavbrott, egen server med
   connect-appen.
 - Wasm-storleken är siffran som avgör om Safari på iPaden orkar. Mät där innan
   mer byggs ovanpå.
+- **`npx vite` eller `npm run dev` utan `ANTECKNINGAR_DOCUMENT_DIR` pekar mot
+  de riktiga anteckningarna i `document/`.** Bara `npm test` sätter den åt en
+  tom temp-mapp automatiskt (`playwright.config.js`). Ett manuellt
+  Playwright-skript mot en egen `vite`-process för att verifiera något i
+  webbläsaren — värdefullt nu när fil-fixen i #15 gjort det möjligt i
+  molnmiljön — skriver till skarpt läge om `ANTECKNINGAR_DOCUMENT_DIR` inte
+  sätts uttryckligen till en temp-mapp. `git status document/` direkt efter
+  en sådan körning, innan något annat, om det händer ändå.
