@@ -4,12 +4,16 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Läge
 
-Skeppat senast: Elis processinstruktion (VISION.md-ändringarna, `prio`- och
-`observation`-etiketter, issue #14) och teckensnittsfixen i `src/typst.js` —
-alla fyra PR:er sammanslagna (#11–#13, #15). Nästa uppgift: issue #14,
-figurflödet ska slå GoodNotes-omvägen — oberoende av M2/synken. Väntar på
-Elis: inget beslut blockerar. En begränsning flaggad: sessionen kan inte
-radera grenar (se "Väntar på Elis"), tio väntar på manuell städning.
+Skeppat senast: issue #14 punkt 1–3 (#17) — rita direkt ovanpå en placerad
+figur fyller nu på den i stället för att skapa en ny ovanpå; punkt 2 och 3
+var redan uppfyllda av befintlig kod. Innan dess: Elis processinstruktion
+(VISION.md, `prio`/`observation`-etiketter, issue #14) och
+teckensnittsfixen i `src/typst.js` (#11–#13, #15). Nästa uppgift: punkt 4
+i #14 (klistra in bild — kräver ett beslut, rör invariant 2) eller
+M2-implementationen (inte längre blockerad av molnmiljön). Väntar på Elis:
+inget beslut blockerar; #14 väntar på hans test på iPaden under en riktig
+föreläsning innan den kan stängas. En begränsning flaggad: sessionen kan
+inte radera grenar (se "Väntar på Elis"), elva väntar på manuell städning.
 
 ## Nu
 
@@ -19,10 +23,12 @@ M2 (⛔) pågår, inte längre blockerad: teckensnittsfixen (se Klart och
 Lärdomar) gör att `src/typst.js` går att köra och verifiera i den här
 molnmiljön igen. Näst steg: skriv M2-implementationen (baserad på
 källkodsläsningen i issue #3), be Elis om en testbegäran på hans egen dator
-innan sammanslagning. M3 väntar på att M2 blir klar. Utöver M2 väntar issue
-#14 (`prio`): figurflödet ska slå GoodNotes-omvägen, oberoende av M2/synken.
-Elis instruktion om process (VISION.md, etiketter, issue #14, grenstädning)
-genomförd, se Klart.
+innan sammanslagning. M3 väntar på att M2 blir klar. Issue #14 (`prio`,
+figurflödet mot GoodNotes-omvägen, oberoende av M2/synken): punkt 1–3
+klara (#17), punkt 4 kvar men kräver ett beslut av Elis (rör invariant 2),
+och själva issuen väntar på Elis test på iPaden under en riktig
+föreläsning innan den kan stängas. Elis instruktion om process (VISION.md,
+etiketter, issue #14, grenstädning) genomförd, se Klart.
 
 ## Klart
 
@@ -104,16 +110,34 @@ genomförd, se Klart.
   och `observation` skapade i repot. Issue #14 skapad med `prio`:
   "Figurflödet ska slå GoodNotes-omvägen"
   (https://github.com/elisgrahn/anteckningar/issues/14).
+- **Issue #14, punkt 1–3.** Rita direkt ovanpå en placerad, omarkerad figur
+  fyller nu på den (laddar in dess sparade streck och fortsätter på dem)
+  i stället för att skapa en ny, överlappande figur — samma `hitPlaced`-yta
+  som markering och drag redan använder. Punkt 2 (ny figur med en gest,
+  utan namngivning) och punkt 3 (storlek som följer ritningen, inte
+  sidbredden) var redan uppfyllda av befintlig kod vid genomläsning; ingen
+  ändring behövdes för dem. Verifierat manuellt mot en riktig kompilering:
+  två streck på samma plats gav en `#place`-rad och en figur med två
+  streck på disk, ett tredje streck på annan plats gav en riktig andra
+  figur. `e2e/continue-placed.spec.js` gör samma kontroll i testsviten.
+  Punkt 4 (klistra in bild, rör invariant 2) och issuens eget klart-kriterium
+  (Elis test på iPaden under en riktig föreläsning) är kvar — se issuen.
+  Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/17
 
 ## Väntar på Elis
 
-Inget beslut. En begränsning värd att känna till: den här sessionens
-GitHub-åtkomst kan skapa och stänga grenar men inte radera dem — `git push
-origin --delete` och `DELETE /repos/.../git/refs/heads/...` gav båda 403
-("Write access to this GitHub API path is not permitted through this
-proxy"). Tio sammanslagna grenar väntar på städning (se Lärdomar för
-listan) — Elis kan radera dem i GitHubs branch-lista på tio sekunder, eller
-säga åt en session med annan behörighet att göra det.
+Inget beslut blockerar arbetet. Två saker att känna till:
+
+- Issue #14 väntar på Elis eget test på iPaden under en riktig föreläsning
+  innan den kan stängas (dess klart-kriterium, inte något kod kan
+  verifiera åt honom).
+- En begränsning i sessionens GitHub-åtkomst: den kan skapa och stänga
+  grenar men inte radera dem — `git push origin --delete` och `DELETE
+  /repos/.../git/refs/heads/...` gav båda 403 ("Write access to this
+  GitHub API path is not permitted through this proxy"). Elva
+  sammanslagna grenar väntar på städning (se Lärdomar för listan) — Elis
+  kan radera dem i GitHubs branch-lista på tio sekunder, eller säga åt en
+  session med annan behörighet att göra det.
 
 ## Lärdomar
 
@@ -180,13 +204,16 @@ säga åt en session med annan behörighet att göra det.
   origin --delete <gren>` och `DELETE /repos/.../git/refs/heads/<gren>` gav
   403 ("Write access to this GitHub API path is not permitted through this
   proxy"), även efter att auto-mode-klassificeraren själv godkänt
-  kommandot. Ingen känd väg runt det från en session. Tio sammanslagna
+  kommandot. Ingen känd väg runt det från en session. Elva sammanslagna
   grenar väntar på manuell städning (PR:erna är redan stängda, bara grenen
   kvar): `claude/jolly-gates-7wbpxc` (#4), `status/m4-merged` (#5),
   `status/m2-spike` (#6), `m2-span-patch` (#7), `m2-experiment-notes` (#8),
   `claude/youthful-hawking-7la1ks` (#1), `vision/mattstocken` (#11),
   `vision/arbetssatt` (#12), `vision/hur-elis-involveras` (#13),
-  `fix/typst-default-font-assets` (#15).
+  `fix/typst-default-font-assets` (#15),
+  `feat/continue-placed-figure-on-tap` (#17). `status/branch-cleanup-list`
+  (#16) och den här sessionens egen `status/session-wrap` tillkommer också
+  så fort de är sammanslagna.
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.
