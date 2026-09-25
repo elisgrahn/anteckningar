@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SCALE } from './ink.js';
+import { SCALE, figureOrigin } from './ink.js';
 import { pageAt } from './sourcemap.js';
 import { hitPlaced } from './placed.js';
 import { paint, Tools, PEN_WIDTH, FLASH_MS, savedColor } from './Canvas.jsx';
@@ -34,6 +34,7 @@ export default function PageDraw({
   onMovePlaced,
   onDeletePlaced,
   anchorAt,
+  figureStrokes,
   scrollerRef,
 }) {
   const hostRef = useRef(null);
@@ -140,6 +141,11 @@ export default function PageDraw({
   const finger = useRef(null);
   const down = useRef(null);
   const moving = useRef(null);
+  // Set when the current drawing session is adding to a figure already on the
+  // page rather than starting a new one — the placed item it belongs to, and
+  // the origin its ink had before this session touched it (for the same
+  // corner correction a grown figure needs in Canvas.jsx/App.jsx).
+  const continuing = useRef(null);
 
   // The dragged position is shown until the new rectangle arrives, so the
   // figure does not snap back to where it was for the length of a compile.
@@ -180,8 +186,21 @@ export default function PageDraw({
       const pen = s.current.lastPenAt;
       s.current = draw.createState(null);
       s.current.lastPenAt = pen;
+      continuing.current = null;
       setUndoCount(0);
       setCount(0);
+    }
+    // The very first press of a session, landing on a figure already on the
+    // page, continues that figure instead of starting a new one on top of it
+    // — the point of an unselected figure staying drawable is to be added to.
+    if (!s.current.strokes.length && !s.current.current) {
+      const at = inPoints(e);
+      const hit = hitPlaced(placed, at.x, at.y);
+      if (hit) {
+        const existing = figureStrokes(hit.path) ?? [];
+        continuing.current = { item: hit, origin: existing.length ? figureOrigin(existing) : { x: 0, y: 0 } };
+        s.current = draw.createState(existing);
+      }
     }
     s.current.page = onPage(p).page;
     down.current = { at: performance.now(), p };
@@ -241,7 +260,16 @@ export default function PageDraw({
     if (d && points && performance.now() - d.at < TAP_MS) {
       const far = points.some((p) => Math.hypot(p.x - d.p.x, p.y - d.p.y) > TAP_PX);
       if (!far) {
-        draw.cancelStroke(s.current);
+        // A tap that landed on a figure preloaded its strokes speculatively
+        // (see onDown) in case it turned into a drag. It didn't — discard the
+        // preload rather than leaving it to be drawn onto by an unrelated
+        // stroke started somewhere else later.
+        if (continuing.current) {
+          s.current = draw.createState(null);
+          continuing.current = null;
+        } else {
+          draw.cancelStroke(s.current);
+        }
         const at = { x: d.p.x / SCALE, y: d.p.y / SCALE };
         setSelected(hitPlaced(placed, at.x, at.y)?.name ?? null);
         return;
@@ -258,7 +286,9 @@ export default function PageDraw({
     setSelected(null);
     setUndoCount(s.current.undo.length);
     setCount(s.current.strokes.length);
-    onStrokes(s.current.strokes.length ? { strokes: s.current.strokes, page: s.current.page } : null);
+    onStrokes(
+      s.current.strokes.length ? { strokes: s.current.strokes, page: s.current.page, continuing: continuing.current } : null,
+    );
   };
 
   const undo = () => {
@@ -267,6 +297,7 @@ export default function PageDraw({
 
   const finish = () => {
     s.current = draw.createState(null);
+    continuing.current = null;
     setUndoCount(0);
     setCount(0);
     onStrokes(null);
