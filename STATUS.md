@@ -2,17 +2,27 @@
 
 Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
+## Läge
+
+Skeppat senast: teckensnittsfixen i `src/typst.js` (PR nedan) — den lösning
+molnmiljöns "Chromium klarar inte wasm-kompilering" egentligen behövde, ingen
+nätverksundantag. Sex VISION.md/process-PR:er från Elis instruktion väntar på
+CI + sammanslagning: Måttstocken, tre nya arbetssättspunkter, nya
+frågeregler (AskUserQuestion i stället för GitHub), plus fixen ovan. Issue
+#14 (`prio`) skapad: figurflödet ska slå GoodNotes-omvägen. Nästa uppgift:
+den issuen, oberoende av M2/synken. Väntar på Elis: inget beslut blockerar —
+se "Väntar på Elis" för en flaggad begränsning (grenstädning).
+
 ## Nu
 
 M0 och M4 är klara och sammanslagna. M1 avfärdat av Elis — testsviten och
 git-historiken räcker som skyddsnät, ingen Vercel-koppling görs (se Klart).
-M2 (⛔) pågår: Elis bekräftade att `sourcemap.js`-hackets begränsningar
-faktiskt stört honom, om än i begränsad mängd, och godkände den avgränsade
-patchen. Spikens tredje omgång körde in i molnmiljöns Chromium-begränsning
-(se Lärdomar) — kan inte verifieras empiriskt här. Näst steg: skriv
-implementationen ändå (baserad på källkodsläsningen i issue #3), be Elis
-om en testbegäran på hans egen dator innan sammanslagning. Inget väntar på
-ett svar just nu. M3 väntar på att M2 blir klar.
+M2 (⛔) pågår, inte längre blockerad: teckensnittsfixen (se Klart och
+Lärdomar) gör att `src/typst.js` går att köra och verifiera i den här
+molnmiljön igen. Näst steg: skriv M2-implementationen (baserad på
+källkodsläsningen i issue #3), be Elis om en testbegäran på hans egen dator
+innan sammanslagning. M3 väntar på att M2 blir klar. Elis instruktion om
+process (VISION.md, etiketter, issue #14, grenstädning) genomförd, se Klart.
 
 ## Klart
 
@@ -68,10 +78,42 @@ ett svar just nu. M3 väntar på att M2 blir klar.
   nedan under Lärdomar — även appens vanliga kompilering misslyckas i den här
   molnsessionens symlänkade Chromium. Detaljer:
   https://github.com/elisgrahn/anteckningar/issues/3
+- **M2-blockeraren i Lärdomar var fel diagnosticerad, nu rättad och fixad.**
+  "Chromium klarar inte typst-wasm-kompileringen" stämde inte —
+  `src/typst.js` bad `loadFonts(fonts)` om sina sex lokala filer utan att
+  säga att de var *hela* uppsättningen, och typst.ts (`options.init.mjs`,
+  `TypstCompilerDriver.init`) tolkar en `loadFonts`-anrop utan
+  `{ assets: ... }` som "inga fonter angivna" och lägger själv till sin
+  egen ~20-filers standardpaket från `cdn.jsdelivr.net` — en host som
+  molnmiljöns nätverkspolicy blockerar (bekräftat med `$HTTPS_PROXY/
+  __agentproxy/status`: upprepade "403 to CONNECT" mot den). Fixat med
+  `loadFonts(fonts, { assets: false })`, verifierat med en instrumenterad
+  Playwright-körning (17 jsdelivr-hämtningar och "Failed to fetch" i
+  statusfältet innan, en lyckad kompilering på 246 ms efter, inga externa
+  hämtningar alls). Löser både molnmiljöns blockering och gör appen mindre
+  beroende av ett nät den ändå ska klara sig utan (M5). PR:
+  https://github.com/elisgrahn/anteckningar/pull/14 <!-- ersätt med rätt PR-länk innan sammanslagning -->
+- **Elis instruktion om process genomförd.** VISION.md: ny sektion
+  "Måttstocken" (https://github.com/elisgrahn/anteckningar/pull/11), tre
+  punkter under "Hur teamet arbetar"
+  (https://github.com/elisgrahn/anteckningar/pull/12), och nya regler för
+  "Hur Elis involveras" — `AskUserQuestion` i sessionen i stället för
+  GitHub-kommentarer, "Läge" överst i STATUS.md, en fråga om nästa steg i
+  slutet av varje session
+  (https://github.com/elisgrahn/anteckningar/pull/13). Etiketterna `prio`
+  och `observation` skapade i repot. Issue #14 skapad med `prio`:
+  "Figurflödet ska slå GoodNotes-omvägen"
+  (https://github.com/elisgrahn/anteckningar/issues/14).
 
 ## Väntar på Elis
 
-Inget just nu.
+Inget beslut. En begränsning värd att känna till: den här sessionens
+GitHub-åtkomst kan skapa och stänga grenar men inte radera dem — `git push
+origin --delete` och `DELETE /repos/.../git/refs/heads/...` gav båda 403
+("Write access to this GitHub API path is not permitted through this
+proxy"). Sex sammanslagna grenar väntar på städning (se Lärdomar för
+listan) — Elis kan radera dem i GitHubs branch-lista på tio sekunder, eller
+säga åt en session med annan behörighet att göra det.
 
 ## Lärdomar
 
@@ -122,12 +164,27 @@ Inget just nu.
   Aldrig committat — bara ett sätt att köra `npm test` interaktivt i sessionen
   när CI ändå laddar rätt revision själv.
 
-- **Samma symlänkade Chromium klarar inte typst-wasm-kompileringen i
-  webbläsaren**, upptäckt under M2-spiken: `net::ERR_TUNNEL_CONNECTION_FAILED`
-  redan vid typsnittsladdning, innan appens egen kod ens är inblandad.
-  `draw.spec.js` märker inte av det eftersom figurinfogning inte väntar på en
-  lyckad kompilering — bara `npm run dev`/en riktig webbläsare kan alltså
-  verifiera något som rör `src/typst.js` i den här molnmiljön just nu.
+- **Rättelse av föregående post: det var aldrig Chromium.** Den symlänkade
+  Chromium klarar typst-wasm-kompileringen fint. `net::ERR_TUNNEL_CONNECTION_FAILED`
+  vid typsnittsladdning kom av att `src/typst.js` anropade `loadFonts(fonts)`
+  utan `{ assets: false }` — typst.ts tolkade det som "inga fonter angivna"
+  och lade själv till sitt eget ~20-filers standardpaket från
+  `cdn.jsdelivr.net`, en host molnmiljöns nätverkspolicy blockerar. Fixat i
+  `src/typst.js` (se Klart); `npm run dev`/en riktig webbläsare mot appen
+  fungerar nu i den här molnmiljön, ingen begränsning kvar. Diagnosen togs
+  fram genom att instrumentera en headless körning (`page.on('requestfailed'
+  /'console'/...)`) i stället för att gissa vidare på tidigare hypoteser —
+  gör om det direkt nästa gång något liknande dyker upp, det tar minuter.
+
+- **Sessionens GitHub-åtkomst kan inte radera grenar.** Både `git push
+  origin --delete <gren>` och `DELETE /repos/.../git/refs/heads/<gren>` gav
+  403 ("Write access to this GitHub API path is not permitted through this
+  proxy"), även efter att auto-mode-klassificeraren själv godkänt
+  kommandot. Ingen känd väg runt det från en session. Sex sammanslagna
+  grenar väntar på manuell städning (PR:erna är redan stängda, bara grenen
+  kvar): `claude/jolly-gates-7wbpxc` (#4), `status/m4-merged` (#5),
+  `status/m2-spike` (#6), `m2-span-patch` (#7), `m2-experiment-notes` (#8),
+  `claude/youthful-hawking-7la1ks` (#1).
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.
