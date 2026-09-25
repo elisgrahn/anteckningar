@@ -5,43 +5,54 @@ det aldrig. Förslag på ändringar lämnas som en fråga (se "Hur Elis involver
 
 ## Vad appen är
 
-En anteckningsapp där text skrivs i Typst och figurer ritas med penna, direkt
-på den renderade sidan eller i en egen rityta. Byggd för föreläsningssalen.
+En anteckningsapp för föreläsningar som ersätter både typst.app och GoodNotes:
+text skrivs i Typst, och figurer och helt handskrivna sidor ritas med penna.
 
-- **iPaden är förstaklassig och självständig.** Den ska gå att skriva Typst-kod
-  och rita på den utan att någon dator är på eller nåbar.
-- **Datorn är lika förstaklassig.** Tangentbord för text, och ritplatta eller
-  pekskärm för figurer.
-- **Enheterna synkar när de når varandra**, och ingen ändring gjord offline får
-  gå förlorad.
-- **Dokumentet är vanlig Typst på disk.** Det ska gå att öppna i vilken editor
-  som helst, versionshantera med git och kompilera med `typst compile`.
+- **iPaden är huvudenheten.** Där antecknas det mesta, med penna och
+  tangentbord.
+- **Datorn är fullvärdig för text**, och ska kunna rita med penna på sikt.
+- **Editorn är i nivå med typst.app.** Förhandsvisningen följer med när man
+  skriver, klick i den träffar rätt tecken, och förslagen har dokumentation.
+- **Inget försvinner vid nätavbrott.** iPaden är nästan alltid uppkopplad, men
+  korta avbrott ska inte märkas förutom i statusfältet.
+- **En enhet i taget.** Båda enheterna används, men inte samtidigt i samma fil.
+  Händer det ändå blir det en konfliktkopia, aldrig en tyst överskrivning.
+- **Anteckningarna är vanliga Typst-projekt på disk**, i ett fritt filträd. En
+  kurs kan vara en enda fil eller en fil per föreläsning som inkluderas från en
+  huvudfil. De går att öppna i vilken editor som helst, versionshantera med git
+  och kompilera med `typst compile`.
 
 ## Varför
 
-typst.app är bra att skriva i men går inte att rita i. Anteckningsappar som går
-att rita i låser in texten i egna format. Den här appen ska ge båda, utan att
-någon av dem blir sämre.
+Elis antecknar i dag i typst.app när det är text och i GoodNotes när det är
+handskrivet. typst.app går inte att rita i, och GoodNotes låser in texten.
+Den här appen ska ge båda i en tjänst, utan att någon av dem blir sämre.
+
+**Klart för riktig användning** när Elis kan sluta använda båda för
+föreläsningar. Det kräver att editorn känns lika bra som typst.app, att inget
+försvinner, att flera kurser går att hålla isär och att handskrivna sidor
+fungerar.
 
 ## Invarianter
 
 Brytas bara efter uttryckligt godkännande från Elis.
 
-1. **Vanlig Typst.** `typst compile document/main.typ` fungerar utan patchar,
-   plugins eller egna kompilatorer.
+1. **Vanlig Typst.** `typst compile` på ett projekts huvudfil fungerar utan
+   patchar, plugins eller egna kompilatorer.
 2. **En figur är en självständig SVG** som Typst renderar direkt, med dragen
    sparade som JSON i en kommentar sist i filen. `SCENE_OPEN` byts aldrig utan
-   migrering av befintliga figurer i samma ändring.
-3. **Local-first.** Varje enhet har en fullständig kopia och fungerar offline.
-   Disken på synkservern är en projektion av det synkade dokumentet, inte en
-   enhet som äger sanningen. (Ersätter "servern äger filerna" från och med M1.)
+   migrering av befintliga figurer i samma ändring. En handskriven sida är en
+   figur som alla andra.
+3. **Servern äger filerna.** Klienten får hålla en lokal kö med ändringar som
+   inte nått servern. Kön töms så fort nätet finns, och statusfältet visar när
+   den inte är tom.
 4. **Källan ska vara läsbar för en språkmodell.** Notation är Typst-makron, inte
    bilder. Text hör hemma i källan, inte i ritningar.
 5. **Ingen sparaknapp.** Allt sparas hela tiden.
 6. **Aldrig fast på "Laddar…".** Misslyckas något startar appen ändå och skriver
    orsaken i statusfältet.
 7. **Inget arbete får förloras.** Varken text eller drag, varken vid synk,
-   migrering eller krasch.
+   nätavbrott, migrering eller krasch. Två versioner som krockar sparas båda.
 
 ## Milstolpar
 
@@ -50,23 +61,25 @@ implementationen börjar. Övriga får påbörjas direkt.
 
 | | Milstolpe | Klart när |
 |---|---|---|
-| M0 | **Grund.** Testsvit (Playwright med simulerade pennhändelser, plus kontroll att `typst compile` går igenom), CI på varje PR. | CI är grön på main, och en avsiktligt trasig ritfunktion fångas av ett test. |
-| M1 ⛔ | **Textsynk med Yjs.** `y-codemirror.next` och lokal lagring i klienten. Befintlig server som relä. | Skriv offline på två enheter, anslut båda, och all text finns kvar på båda. |
-| M2 | **Förhandsversion per PR** på en webbadress, så att Elis kan testa på iPaden utan dator. | En länk i varje PR öppnar en fungerande version på iPaden. |
-| M3 ⛔ | **Synkserver i Rust** med `yrs`, som skriver ut `main.typ` och figurerna till disk. | Vite-pluginen är borta och `typst compile` på serverns disk ger samma dokument. |
-| M4 ⛔ | **Figurer i Yjs**, varje figur som en mängd drag med ID. | Rita i samma figur på två enheter offline, anslut, och alla drag finns kvar. |
-| M5 | **Full offline** som PWA med service worker. | Flygplansläge på iPaden: appen startar, går att skriva och rita i, och synkar när nätet är tillbaka. |
-| M6 ⛔ | **Spann i wasm.** Egen modul med `typst` och `typst-ide`. Börjar med en spik som verifierar att `typst-ide` bygger för `wasm32`. | `withMarkers`, avslutaren och heuristiken i `sourcemap.js` är borttagna, och klick i utfallet träffar tecken, inte block. |
-| M7 | **Penna på datorn.** Musen markerar när en penna upptäckts, suddänden på ritplattor suddar. | Wacom-penna ritar med tryck och vänd penna suddar, i Chrome och Firefox. |
+| M0 | **Grund.** Testsvit (Playwright med simulerade pennhändelser, plus kontroll att `typst compile` går igenom), CI på varje PR. **Klar**, #1. | CI är grön på main, och en avsiktligt trasig ritfunktion fångas av ett test. |
+| M1 | **Förhandsversion per PR** på en webbadress, så att Elis kan testa på iPaden utan dator. | En länk i varje PR öppnar en fungerande version på iPaden. |
+| M2 ⛔ | **Typst i egen wasm-modul, med spann.** Egen modul med `typst` och `typst-ide`. Börjar med en spik som verifierar att `typst-ide` bygger för `wasm32` och mäter modulens storlek i Safari på iPaden. Förslaget ska visa hur figurernas ankring (`#place` efter sitt block) överlever när markörerna försvinner. | `withMarkers`, avslutaren och heuristiken i `sourcemap.js` är borttagna. Klick i utfallet träffar tecken, inte block, förhandsvisningen följer markören, och placerade figurer ankrar som förut. |
+| M3 | **Förslag och fel från `typst-ide`.** Autocomplete med dokumentation och parameterhjälp, fel och varningar understrukna i koden. Dokumentets egna makron och substitutionen från `complete.js` finns kvar. | Samma förslag och fel som typst.app ger, på ett dokument som använder både inbyggda funktioner och egna makron. |
+| M4 | **Kö vid nätavbrott.** Text och figurer köas lokalt (IndexedDB) när servern inte svarar och skickas när den gör det igen. Servern känner igen en skrivning som bygger på en gammal version och sparar den som konfliktkopia bredvid originalet. | Flygplansläge på iPaden en minut mitt i skrivande och ritande: allt når servern efteråt. Samma fil ändrad på två enheter utan nät: båda versionerna finns på disk. |
+| M5 ⛔ | **Server som inte kräver hemdatorn.** Beslutsförslag om var servern står, med kravet att den är gratis eller nästan gratis och fungerar när hemdatorn är avstängd. Egen serverprocess i stället för Vite-pluginen, och åtkomstskydd. | iPaden skriver och synkar när hemdatorn är avstängd, och den som inte är Elis kan varken läsa eller skriva. |
+| M6 ⛔ | **Filträd och flera kurser.** Fritt filträd med Typst-projekt; en kurs är en enda fil eller en huvudfil som inkluderar en fil per föreläsning. Förslaget ska ta upp hur dagens `document/` flyttas utan att något tappas. | Två kurser, en av varje sort, går att växla mellan i appen, och båda kompilerar med `typst compile`. |
+| M7 | **Handskrivna sidor.** En sida som bara är en stor rityta, en figur i flödet med `#pagebreak()` runt om. | En härledning skriven helt för hand hamnar som en egen sida mellan textsidorna, och `typst compile` ger samma sida. |
+| M8 | **Penna på datorn.** Musen markerar när en penna upptäckts, suddänden på ritplattor suddar. | Wacom-penna ritar med tryck och vänd penna suddar, i Chrome och Firefox. |
 
 Ordningen gäller om inte Elis säger annat. Buggar i det som redan finns går före
 nya milstolpar.
 
 ## Medvetet utelämnat
 
-Flera dokument och filträd. Åtkomstskydd utöver det synkservern behöver.
-Text i ritläget. Ritande över sidbrytningar. Zoom i förhandsvisningen tills
-det visar sig behövas.
+Samtidig redigering i realtid och CRDT (Yjs); en enhet i taget räcker.
+Att starta appen helt utan nät (PWA). Att anteckna på föreläsarens slides
+(PDF-import), som kan komma senare men inte nu. Text i ritläget. Ritande över
+sidbrytningar. Zoom i förhandsvisningen tills det visar sig behövas.
 
 ## Hur teamet arbetar
 
