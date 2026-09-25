@@ -4,11 +4,10 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Nu
 
-M1 och M2 väntar båda på Elis (se nedan). M4 (kö vid nätavbrott) väntar på
-grön CI och sammanslagning i https://github.com/elisgrahn/anteckningar/pull/4.
-M2 är ⛔ så M3 kan inte börja förrän Elis svarat på designförslaget. Nästa
-uppgift efter PR #4 är slutförd: M7 eller M8, som båda saknar beroenden till
-M1–M3 (M6 är också ⛔ och väntar på Elis).
+M0 och M4 är klara och sammanslagna. M1 och M2 väntar båda på Elis (se
+nedan) — M2 är ⛔ så M3 kan inte börja förrän Elis svarat på designförslaget.
+Näst på tur: M7 (handskrivna sidor) eller M8 (penna på datorn), som båda
+saknar beroenden till M1–M3 (M6 är också ⛔ och väntar på Elis).
 
 ## Klart
 
@@ -33,7 +32,7 @@ M1–M3 (M6 är också ⛔ och väntar på Elis).
   servern efter nästa poll; och ett test som skickar två skrivningar mot
   samma bas-`mtime` direkt mot fil-API:t och kontrollerar att den andra
   hamnar i en konfliktfil på disk i stället för att skriva över den första.
-  PR: https://github.com/elisgrahn/anteckningar/pull/4
+  Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/4
 
 ## Väntar på Elis
 
