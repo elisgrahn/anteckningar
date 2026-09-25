@@ -92,7 +92,7 @@ process (VISION.md, etiketter, issue #14, grenstädning) genomförd, se Klart.
   statusfältet innan, en lyckad kompilering på 246 ms efter, inga externa
   hämtningar alls). Löser både molnmiljöns blockering och gör appen mindre
   beroende av ett nät den ändå ska klara sig utan (M5). PR:
-  https://github.com/elisgrahn/anteckningar/pull/14 <!-- ersätt med rätt PR-länk innan sammanslagning -->
+  https://github.com/elisgrahn/anteckningar/pull/15
 - **Elis instruktion om process genomförd.** VISION.md: ny sektion
   "Måttstocken" (https://github.com/elisgrahn/anteckningar/pull/11), tre
   punkter under "Hur teamet arbetar"
