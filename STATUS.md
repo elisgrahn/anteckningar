@@ -4,11 +4,11 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Nu
 
-M1 och M2 väntar båda på Elis (se nedan). Under tiden: M4 (kö vid
-nätavbrott) är genomförd och väntar på CI/sammanslagning i sin PR.
+M1 och M2 väntar båda på Elis (se nedan). M4 (kö vid nätavbrott) väntar på
+grön CI och sammanslagning i https://github.com/elisgrahn/anteckningar/pull/4.
 M2 är ⛔ så M3 kan inte börja förrän Elis svarat på designförslaget. Nästa
-lediga milstolpe efter M4 är M6 (⛔, väntar på Elis) eller M7/M8, som båda
-saknar beroenden till M1–M3.
+uppgift efter PR #4 är slutförd: M7 eller M8, som båda saknar beroenden till
+M1–M3 (M6 är också ⛔ och väntar på Elis).
 
 ## Klart
 
@@ -33,8 +33,7 @@ saknar beroenden till M1–M3.
   servern efter nästa poll; och ett test som skickar två skrivningar mot
   samma bas-`mtime` direkt mot fil-API:t och kontrollerar att den andra
   hamnar i en konfliktfil på disk i stället för att skriva över den första.
-  PR: (öppnas i den här sessionen, se commit-historiken på
-  `claude/jolly-gates-7wbpxc`)
+  PR: https://github.com/elisgrahn/anteckningar/pull/4
 
 ## Väntar på Elis
 
