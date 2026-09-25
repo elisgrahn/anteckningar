@@ -13,7 +13,7 @@ import Editor, {
 import { lineAt } from './sourcemap.js';
 import { anchorFor, offsetFrom, pageTop, placeCode, placedRects, svgSize } from './placed.js';
 import SymbolRow, { macros } from './SymbolRow.jsx';
-import Canvas from './Canvas.jsx';
+import Canvas, { A4_PT } from './Canvas.jsx';
 import PageDraw from './PageDraw.jsx';
 import { compile } from './typst.js';
 import { figureOrigin, fromSvg, inkTopLeft, toSvg, SCALE } from './ink.js';
@@ -28,6 +28,10 @@ const FIG_DIR = 'figures/';
 // #image, not #figure: the latter exists for numbering and cross-references and
 // writes "Figure 1:" in the output, which is not what you want during a lecture.
 const figureCode = (name) => `\n#image("${FIG_DIR}${name}")\n`;
+
+// A handwritten page (M7): #pagebreak() on both sides puts the figure on its
+// own page, whatever comes before or after it in the source.
+const pageCode = (name) => `\n#pagebreak()\n#image("${FIG_DIR}${name}")\n#pagebreak()\n`;
 
 export default function App() {
   const viewRef = useRef(null);
@@ -301,6 +305,13 @@ export default function App() {
     }
   }, [figures, placed]);
 
+  // A whole handwritten page (M7): a fresh figure, sized to the page itself
+  // rather than to its ink, inserted between two #pagebreak() so it lands as
+  // its own page instead of flowing into the surrounding text.
+  const openPageCanvas = useCallback(() => {
+    setDrawing({ name: api.nextFigureName(sync.current.figures), strokes: [], isNew: true, page: true });
+  }, []);
+
   // Double-clicking the output goes to the line in the code. If that line holds
   // a figure it opens for editing instead — the cursor is already in place.
   //
@@ -440,7 +451,7 @@ export default function App() {
   );
 
   const finishCanvas = async (svgText) => {
-    const { name, isNew, place, origin } = drawing;
+    const { name, isNew, place, origin, page } = drawing;
     const baseMtime = sync.current.figures[name];
     const applyLocal = () => {
       const next = new Map(figuresRef.current).set(FIG_DIR + name, api.toBytes(svgText));
@@ -449,7 +460,7 @@ export default function App() {
       // If we only added to a figure that is already in the text, the line
       // stays as it is. Only new figures are inserted.
       if (isNew) {
-        insertAtCursor(viewRef.current, figureCode(name));
+        insertAtCursor(viewRef.current, page ? pageCode(name) : figureCode(name));
       } else if (place && origin) {
         // A placed figure that grew upwards or to the left has a new corner.
         // The offsets follow it, so the ink stays where it was drawn instead of
@@ -574,6 +585,7 @@ export default function App() {
         <button onClick={openCanvas}>
           {onFigure ? 'Edit' : 'Draw'} <kbd>⌘I</kbd>
         </button>
+        <button onClick={openPageCanvas}>New page</button>
         {unused.length > 0 && (
           <button className={showCleanup ? 'on' : ''} onClick={() => setShowCleanup((v) => !v)}>
             Clean up {unused.length}
@@ -681,6 +693,7 @@ export default function App() {
           initialStrokes={drawing.strokes}
           onDone={finishCanvas}
           onCancel={() => setDrawing(null)}
+          pageSize={drawing.page ? A4_PT : undefined}
         />
       )}
     </div>

@@ -189,6 +189,27 @@ ritpixlar. Ingen `width:` i den infogade koden — en liten skiss blir liten på
 pappret. A4:s textbredd är 453 pt, så en figur bredare än ~907 ritade pixlar
 spiller ut i marginalen; justera `SCALE` i `src/ink.js` om det blir ett problem.
 
+### Handskrivna sidor (M7)
+
+"New page" i huvudet öppnar samma `Canvas.jsx` som `Cmd-I`, men med en
+`pageSize`-prop (`A4_PT`, i punkter) och en synligt annorlunda yta: en
+centrerad "pappersark"-låda (`.sheet`) i stället för att fylla hela rutan
+kant i kant, så det är tydligt att man ritar en hel sida och inte en liten
+skiss. Done infogar `#pagebreak()`, figuren, `#pagebreak()` som **en enda**
+rad — figuren lever i flödet precis som en vanlig `#image`, den äger bara
+sidbrytningarna runt sig. Ingen ankring, inget `#place`: en handskriven sida
+flyttas genom att flytta raden för hand, som vilken text som helst.
+
+Storleken skiljer sig från en vanlig figur: `toSvg(strokes, fixedSize)` tar en
+valfri `{width, height}` i punkter och skriver **den** som `width`/`height` i
+stället för att härleda den ur bläckets ramar + vaddering. Utan den (alla
+andra anrop) är beteendet oförändrat. Bläckets koordinater fångas ändå i
+CSS-pixlar av lådan, som `Canvas.jsx` alltid gjort — omräkningen till
+sidrelativa ritpixlar (`scaleRef`, `pageSize.height * SCALE / lådans CSS-höjd`)
+sker bara en gång, i `done()`, inte vid varje `pointermove`. Annars hade
+render-loopen och den fångade punktlistan behövt två olika koordinatsystem
+samtidigt.
+
 ### Rita på utfallet (`src/PageDraw.jsx`)
 
 Pennan ritar, fingret rullar. Fingerrullningen görs för hand, eftersom
@@ -374,3 +395,11 @@ filträd, markeringsverktyg i ritläget. Kö vid nätavbrott, egen server med
   connect-appen.
 - Wasm-storleken är siffran som avgör om Safari på iPaden orkar. Mät där innan
   mer byggs ovanpå.
+- **`npx vite` eller `npm run dev` utan `ANTECKNINGAR_DOCUMENT_DIR` pekar mot
+  de riktiga anteckningarna i `document/`.** Bara `npm test` sätter den åt en
+  tom temp-mapp automatiskt (`playwright.config.js`). Ett manuellt
+  Playwright-skript mot en egen `vite`-process för att verifiera något i
+  webbläsaren — värdefullt nu när fil-fixen i #15 gjort det möjligt i
+  molnmiljön — skriver till skarpt läge om `ANTECKNINGAR_DOCUMENT_DIR` inte
+  sätts uttryckligen till en temp-mapp. `git status document/` direkt efter
+  en sådan körning, innan något annat, om det händer ändå.

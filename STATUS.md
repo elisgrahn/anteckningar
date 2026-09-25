@@ -4,42 +4,38 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Läge
 
-Skeppat senast: en definitiv slutsats på M2:s öppna fråga (issue #3) — dagens
-npm-paket kan inte emittera spann, oavsett JS-anrop, för `SHOULD_ATTACH_
-DEBUG_INFO` är en Rust-**konstant**, inte en körtidsflagga. Kräver en egen
-wasm-modul, precis vad VISION.md redan sa. Ingen kod skriven än, bara
-research (se Lärdomar för detaljerna). Innan dess: issue #14 punkt 1–3
-(#17), och Elis processinstruktion + teckensnittsfixen (#11–#13, #15).
+Skeppat senast: M7 (handskrivna sidor, #10) och en definitiv slutsats på
+M2:s öppna fråga (issue #3) — dagens npm-paket kan inte emittera spann,
+oavsett JS-anrop, för `SHOULD_ATTACH_DEBUG_INFO` är en Rust-**konstant**,
+inte en körtidsflagga. Kräver en egen wasm-modul, precis vad VISION.md
+redan sa. Ingen kod skriven än för den, bara research (se Lärdomar).
 
 **Pågående diskussion med Elis:** M5 (⛔, server som inte kräver hemdatorn)
-— han vill undvika Supabase, föreslog Google Drive i stället (klienten
-pratar direkt mot Drive-API:t, ingen egen backend alls). Jag höll med och
-la fram en design; han vill tänka mer innan han bestämmer. Inget byggt än.
+— han vill undvika Supabase, föreslog Google Drive i stället. Ingen har
+frågat honom om M6 (⛔, filträd) än via `AskUserQuestion` — den frågan
+ligger bara som en GitHub-kommentar från innan processreglerna ändrades
+(issue #9), och bör ställas om.
 
-Nästa uppgift: bygga och mäta den egna wasm-modulen (M2, kräver `wasm-pack`
-+ `wasm32`-target, inte installerat än men `cargo`/`rustc` finns), eller
-vänta på Elis besked om M5, eller punkt 4 i #14 (kräver ett beslut, rör
-invariant 2). Väntar på Elis: M5-beslutet, och #14 väntar på hans test på
-iPaden under en riktig föreläsning innan den kan stängas. En begränsning
-flaggad: sessionen kan inte radera grenar, elva väntar på manuell städning.
+Nästa uppgift: bygga och mäta den egna wasm-modulen (M2, `wasm-pack` +
+`wasm32`-target saknas än), M8 (penna på datorn, oberoende av M2/M5/M6),
+eller punkt 4 i #14 (kräver ett beslut, rör invariant 2). Väntar på Elis:
+M5-beslutet, M6-frågan (bör ställas på nytt via `AskUserQuestion`), och
+#14 väntar på hans test på iPaden under en riktig föreläsning.
 
 ## Nu
 
-M0 och M4 är klara och sammanslagna. M1 avfärdat av Elis — testsviten och
-git-historiken räcker som skyddsnät, ingen Vercel-koppling görs (se Klart).
-M2 (⛔): teckensnittsfixen gör att `src/typst.js` går att köra och verifiera
-i den här molnmiljön igen, och den körningen gav nu ett definitivt svar på
-den sista öppna frågan (se Läge och Lärdomar) — ingen väg runt en egen
-wasm-modul. Näst steg: patcha `SHOULD_ATTACH_DEBUG_INFO` i en fork av
-typst.ts, bygg med `wasm-pack` för `wasm32`, mät storleken (M2:s eget
-klart-kriterium för spiken). M3 väntar på att M2 blir klar. Issue #14
-(`prio`, figurflödet mot GoodNotes-omvägen, oberoende av M2/synken):
-punkt 1–3 klara (#17), punkt 4 kvar men kräver ett beslut av Elis (rör
+M0, M1 (avfärdad), M4 och M7 är klara. M2 (⛔): definitivt svar — en egen
+wasm-modul krävs, ingen väg runt det. Näst steg: patcha
+`SHOULD_ATTACH_DEBUG_INFO` i en fork av typst.ts, bygg med `wasm-pack` för
+`wasm32`, mät storleken (M2:s eget klart-kriterium för spiken). M3 väntar
+på M2. M6 (⛔): designförslag klart (issue #9), väntar bara på vilket namn
+dagens `document/`-mapp ska få som projekt — frågan är ställd som en
+GitHub-kommentar från innan `AskUserQuestion`-regeln, bör ställas om.
+Issue #14 (`prio`): punkt 1–3 klara (#17), punkt 4 kvar (beslut, rör
 invariant 2), och själva issuen väntar på Elis test på iPaden under en
-riktig föreläsning innan den kan stängas. M5 (⛔, server utan hemdator):
-Elis vill undvika Supabase, diskuterar en Google Drive-lösning i stället —
-väntar på hans beslut, inget byggt. Elis instruktion om process (VISION.md,
-etiketter, issue #14, grenstädning) genomförd, se Klart.
+riktig föreläsning. M5 (⛔, server utan hemdator): Elis diskuterar Google
+Drive i stället för Supabase, väntar på hans beslut. M8 saknar beroenden
+till M1–M6 och kan påbörjas när som helst.
 
 ## Klart
 
@@ -65,51 +61,58 @@ etiketter, issue #14, grenstädning) genomförd, se Klart.
   samma bas-`mtime` direkt mot fil-API:t och kontrollerar att den andra
   hamnar i en konfliktfil på disk i stället för att skriva över den första.
   Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/4
+- **M7.** "New page" i huvudet öppnar samma ritläge som `Cmd-I` men med en
+  `pageSize`-prop (`Canvas.jsx`, A4 i punkter) och en centrerad
+  "pappersark"-yta i stället för att fylla hela rutan. Done infogar
+  `#pagebreak()` + figuren + `#pagebreak()` som en rad — ingen ankring,
+  ingen `#place`, sidan lever i flödet som vilken `#image` som helst.
+  `ink.js`s `toSvg(strokes, fixedSize)` skriver den fasta storleken i
+  stället för att härleda den ur bläckets ram, så en tom eller nästan tom
+  sida ändå blir sidstor. Två test: `e2e/page-draw.spec.js` ritar ett
+  pennstreck och kontrollerar att raden får rätt `#pagebreak()`-omslag
+  (verifierat att det fångar en trasig infogning: bytte tillfälligt till
+  vanlig `figureCode` i `finishCanvas`, testet slog rött, återställt innan
+  commit), och ett andra test kör riktig `typst compile` på en liten fixtur
+  och kontrollerar att exakt tre sidor kommer ut (text, den ritade sidan,
+  text) — mätt, inte antaget. PR: https://github.com/elisgrahn/anteckningar/pull/10
 - **M1, avfärdat.** Elis: testsviten + git-historiken räcker, han behöver
   inte kunna kolla en PR från iPaden före sammanslagning. Ingen
   Vercel-koppling görs. https://github.com/elisgrahn/anteckningar/issues/2
   (stängd, "not planned").
-- **M2, spiken (två omgångar).** Läst källkoden på `Myriad-Dreamin/typst.ts`
-  (den `typst-ts-web-compiler`/`typst-ts-renderer` vi redan beror på, v0.7.0)
-  via GitHubs kodsökning och en lokal klon, inte gissat. Första fyndet:
-  `RenderSession.getSourceLoc(path)`/`data-span`-attributet på renderade
-  SVG-element är redan kompilerade in i vår nuvarande wasm-fil — ingen
-  ombyggnad krävs för att gå från ett klickat element till ett Typst-spann.
-  Andra fyndet, ännu bättre: den data som idag är tom (`page_source_mapping`,
-  det CLAUDE.md kallar tomt `page_sources`) fylls bara i om
-  `compiler.setAttachDebugInfo(true)` slås på — också en redan skickad
-  JS-metod, men bara på den **inkrementella** kompileringsvägen, som
-  `src/typst.js` inte använder idag (vi kör ett engångsanrop via
-  `runWithWorld`/`world.vector()`). Möjligen krävs alltså ingen Rust-patch
-  alls. Kvar att verifiera: om spann-id:t den vägen ger faktiskt går att slå
-  upp till rad/kolumn med en redan exponerad funktion, eller om det (som
-  `data-tid` redan är) bara är ett innehållsfingeravtryck som kräver den lilla
-  patchen från första spiken (`resolve_source_span` i
-  `crates/reflexo-typst/src/error.rs`, identifierad men inte skriven).
-  Tredje fyndet: `IncrServer::default()` sätter redan `should_attach_debug_info
-  = true`, `setAttachDebugInfo` behövs alltså inte alls — men den metoden
-  finns bekräftat bara på `IncrServer`, inte på `TypstCompiler`, så bytet är
-  ett sessionsmodellsbyte (`manipulateData`/återanvänd session), inte bara en
-  flagga. Försökte verifiera empiriskt (ett kastprov i `src/typst.js`, borttaget
-  igen) men körde in i samma Chromium-begränsning som redan är dokumenterad
-  nedan under Lärdomar — även appens vanliga kompilering misslyckas i den här
-  molnsessionens symlänkade Chromium. Detaljer:
+- **M6, designförslaget.** Fritt filträd som en platt lista projekt under
+  `notes/<namn>/` (samma `main.typ` + `figures/` som idag, en kurs med
+  flera föreläsningar är fortfarande en enda fil som `#include`:ar andra),
+  route-prefix `/api/:project/...`, klienten remountar hela `App` vid
+  projektbyte i stället för att bygga om synken för ett byte i farten.
+  Enda blockerande frågan: vilket namn dagens `document/` ska få.
+  https://github.com/elisgrahn/anteckningar/issues/9 (bör ställas om via
+  `AskUserQuestion`, se Väntar på Elis).
+- **M2, spiken (tre omgångar, definitivt svar).** Läst källkoden på
+  `Myriad-Dreamin/typst.ts` (den `typst-ts-web-compiler`/`-renderer` vi
+  redan beror på, v0.7.0) via GitHubs kodsökning och en lokal klon, inte
+  gissat. Slutsats: `Feat::SHOULD_ATTACH_DEBUG_INFO` är en Rust-**konstant**,
+  hårdkodad `false` i alla publicerade `ExportFeature`-implementationer
+  (`crates/conversion/vec2svg/src/frontend/incremental.rs:25` m.fl.) — ingen
+  JS-anropad metod (`setAttachDebugInfo`, `IncrServer`, inkrementell vs.
+  engångskompilering) kan ändra en Rust-konstant. `getSourceLoc` kastar
+  `out of bound access ... page_sources ... actual: 0` snarare än att ge
+  något upplösningsbart. Dagens npm-paket kan alltså inte emittera spann,
+  punkt slut — en egen wasm-modul krävs, precis vad VISION.md:s M2-rad
+  redan sa. Detaljer och alla tre spikomgångarna:
   https://github.com/elisgrahn/anteckningar/issues/3
-- **M2-blockeraren i Lärdomar var fel diagnosticerad, nu rättad och fixad.**
-  "Chromium klarar inte typst-wasm-kompileringen" stämde inte —
-  `src/typst.js` bad `loadFonts(fonts)` om sina sex lokala filer utan att
-  säga att de var *hela* uppsättningen, och typst.ts (`options.init.mjs`,
-  `TypstCompilerDriver.init`) tolkar en `loadFonts`-anrop utan
-  `{ assets: ... }` som "inga fonter angivna" och lägger själv till sin
-  egen ~20-filers standardpaket från `cdn.jsdelivr.net` — en host som
-  molnmiljöns nätverkspolicy blockerar (bekräftat med `$HTTPS_PROXY/
-  __agentproxy/status`: upprepade "403 to CONNECT" mot den). Fixat med
-  `loadFonts(fonts, { assets: false })`, verifierat med en instrumenterad
-  Playwright-körning (17 jsdelivr-hämtningar och "Failed to fetch" i
-  statusfältet innan, en lyckad kompilering på 246 ms efter, inga externa
-  hämtningar alls). Löser både molnmiljöns blockering och gör appen mindre
-  beroende av ett nät den ändå ska klara sig utan (M5). PR:
-  https://github.com/elisgrahn/anteckningar/pull/15
+- **M2-blockeraren i en tidigare Lärdomar-post var fel diagnosticerad, nu
+  rättad och fixad.** "Chromium klarar inte typst-wasm-kompileringen"
+  stämde inte — `src/typst.js` bad `loadFonts(fonts)` om sina sex lokala
+  filer utan att säga att de var *hela* uppsättningen, och typst.ts
+  (`options.init.mjs`, `TypstCompilerDriver.init`) tolkar ett
+  `loadFonts`-anrop utan `{ assets: ... }` som "inga fonter angivna" och
+  lägger själv till sin egen ~20-filers standardpaket från
+  `cdn.jsdelivr.net` — en host molnmiljöns nätverkspolicy blockerar.
+  Fixat med `loadFonts(fonts, { assets: false })`, verifierat med en
+  instrumenterad Playwright-körning (17 jsdelivr-hämtningar och "Failed to
+  fetch" innan, en lyckad kompilering på 246 ms efter, inga externa
+  hämtningar alls). `npm run dev`/en riktig webbläsare mot appen fungerar
+  nu i den här molnmiljön. PR: https://github.com/elisgrahn/anteckningar/pull/15
 - **Elis instruktion om process genomförd.** VISION.md: ny sektion
   "Måttstocken" (https://github.com/elisgrahn/anteckningar/pull/11), tre
   punkter under "Hur teamet arbetar"
@@ -134,22 +137,6 @@ etiketter, issue #14, grenstädning) genomförd, se Klart.
   Punkt 4 (klistra in bild, rör invariant 2) och issuens eget klart-kriterium
   (Elis test på iPaden under en riktig föreläsning) är kvar — se issuen.
   Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/17
-- **M2, spikens tredje omgång — definitivt svar, ingen väg runt en egen
-  wasm-modul.** Körde själv (molnmiljön klarar det nu, se fixen ovan) det
-  test som en tidigare runda skrev som en testbegäran till Elis. Två JS-fel
-  i vägen fixade under körningen: `compile()`s returvärde är `{result:
-  bytes}` när diagnostics-formatet inte är noll — den publika wrappern kan
-  aldrig begära format 0 — och renderaren vill ha den uppackade `.result`,
-  inte hela objektet. Med det fixat: `getSourceLoc` kastar `out of bound
-  access ... page_sources ... actual: 0`, inte en krasch. Klonade
-  `Myriad-Dreamin/typst.ts` och spårade orsaken: `Feat::
-  SHOULD_ATTACH_DEBUG_INFO` är en Rust-**konstant**, hårdkodad `false` i
-  alla publicerade `ExportFeature`-implementationer
-  (`crates/conversion/vec2svg/src/frontend/incremental.rs:25` m.fl.) —
-  `IncrServer::set_should_attach_debug_info(true)` sätter bara den andra
-  halvan av ett `&&`, körtidsflaggan. Ingen JS-anropad metod kan ändra en
-  Rust-konstant. Definitivt: dagens npm-paket kan inte emittera spann,
-  punkt slut. Detaljer: https://github.com/elisgrahn/anteckningar/issues/3
 
 ## Väntar på Elis
 
@@ -158,16 +145,20 @@ etiketter, issue #14, grenstädning) genomförd, se Klart.
   ingen egen backend alls — bara statisk hosting kvar att lösa (Vercel
   eller vad som är enklast). Han vill tänka mer innan han bestämmer sig;
   inget byggs förrän han svarar.
+- **M6 (⛔, blockerar inget annat).** Designförslaget är klart (se Klart);
+  bara namnet på dagens `document/`-projekt är den blockerande frågan.
+  Ställd som en GitHub-kommentar innan `AskUserQuestion`-regeln fanns
+  (issue #9) — bör ställas om i en session.
 - Issue #14 väntar på Elis eget test på iPaden under en riktig föreläsning
   innan den kan stängas (dess klart-kriterium, inte något kod kan
   verifiera åt honom).
 - En begränsning i sessionens GitHub-åtkomst: den kan skapa och stänga
   grenar men inte radera dem — `git push origin --delete` och `DELETE
   /repos/.../git/refs/heads/...` gav båda 403 ("Write access to this
-  GitHub API path is not permitted through this proxy"). Elva
-  sammanslagna grenar väntar på städning (se Lärdomar för listan) — Elis
-  kan radera dem i GitHubs branch-lista på tio sekunder, eller säga åt en
-  session med annan behörighet att göra det.
+  GitHub API path is not permitted through this proxy"). Tolv+ sammanslagna
+  grenar väntar på städning (se Lärdomar för listan) — Elis kan radera dem
+  i GitHubs branch-lista på tio sekunder, eller säga åt en session med
+  annan behörighet att göra det.
 
 ## Lärdomar
 
@@ -218,9 +209,10 @@ etiketter, issue #14, grenstädning) genomförd, se Klart.
   Aldrig committat — bara ett sätt att köra `npm test` interaktivt i sessionen
   när CI ändå laddar rätt revision själv.
 
-- **Rättelse av föregående post: det var aldrig Chromium.** Den symlänkade
-  Chromium klarar typst-wasm-kompileringen fint. `net::ERR_TUNNEL_CONNECTION_FAILED`
-  vid typsnittsladdning kom av att `src/typst.js` anropade `loadFonts(fonts)`
+- **Det var aldrig Chromium som blockerade typst-wasm-kompileringen i
+  webbläsaren — en tidigare session diagnosticerade fel.** Den symlänkade
+  Chromium klarar det fint. `net::ERR_TUNNEL_CONNECTION_FAILED` vid
+  typsnittsladdning kom av att `src/typst.js` anropade `loadFonts(fonts)`
   utan `{ assets: false }` — typst.ts tolkade det som "inga fonter angivna"
   och lade själv till sitt eget ~20-filers standardpaket från
   `cdn.jsdelivr.net`, en host molnmiljöns nätverkspolicy blockerar. Fixat i
@@ -234,16 +226,16 @@ etiketter, issue #14, grenstädning) genomförd, se Klart.
   origin --delete <gren>` och `DELETE /repos/.../git/refs/heads/<gren>` gav
   403 ("Write access to this GitHub API path is not permitted through this
   proxy"), även efter att auto-mode-klassificeraren själv godkänt
-  kommandot. Ingen känd väg runt det från en session. Elva sammanslagna
-  grenar väntar på manuell städning (PR:erna är redan stängda, bara grenen
+  kommandot. Ingen känd väg runt det från en session. Sammanslagna grenar
+  som väntar på manuell städning (PR:erna är redan stängda, bara grenen
   kvar): `claude/jolly-gates-7wbpxc` (#4), `status/m4-merged` (#5),
   `status/m2-spike` (#6), `m2-span-patch` (#7), `m2-experiment-notes` (#8),
   `claude/youthful-hawking-7la1ks` (#1), `vision/mattstocken` (#11),
   `vision/arbetssatt` (#12), `vision/hur-elis-involveras` (#13),
   `fix/typst-default-font-assets` (#15),
   `feat/continue-placed-figure-on-tap` (#17), `status/branch-cleanup-list`
-  (#16), `status/session-wrap` (#18). Den här PR:ens egen gren tillkommer
-  också så fort den är sammanslagen.
+  (#16), `status/session-wrap` (#18), och `m7-handwritten-pages` (#10) så
+  fort den PR:en är sammanslagen.
 
 - **`cargo`/`rustc` finns i molnmiljön (1.94.1), men `wasm-pack` och
   `wasm32-unknown-unknown`-target gör det inte.** Behövs för M2:s riktiga
