@@ -8,11 +8,11 @@ M0 och M4 är klara och sammanslagna. M1 avfärdat av Elis — testsviten och
 git-historiken räcker som skyddsnät, ingen Vercel-koppling görs (se Klart).
 M2 (⛔) pågår: Elis bekräftade att `sourcemap.js`-hackets begränsningar
 faktiskt stört honom, om än i begränsad mängd, och godkände den avgränsade
-patchen. Inget väntar på ett svar just nu — nästa steg är ett konkret
-experiment (se Klart, M2-spiken): byta `src/typst.js` till den inkrementella
-kompileringsvägen + `setAttachDebugInfo(true)` och se om spannet som kommer
-tillbaka redan går att slå upp till rad/kolumn utan en Rust-patch. M3 väntar
-på att M2 blir klar.
+patchen. Spikens tredje omgång körde in i molnmiljöns Chromium-begränsning
+(se Lärdomar) — kan inte verifieras empiriskt här. Näst steg: skriv
+implementationen ändå (baserad på källkodsläsningen i issue #3), be Elis
+om en testbegäran på hans egen dator innan sammanslagning. Inget väntar på
+ett svar just nu. M3 väntar på att M2 blir klar.
 
 ## Klart
 
@@ -59,7 +59,15 @@ på att M2 blir klar.
   `data-tid` redan är) bara är ett innehållsfingeravtryck som kräver den lilla
   patchen från första spiken (`resolve_source_span` i
   `crates/reflexo-typst/src/error.rs`, identifierad men inte skriven).
-  Detaljer: https://github.com/elisgrahn/anteckningar/issues/3
+  Tredje fyndet: `IncrServer::default()` sätter redan `should_attach_debug_info
+  = true`, `setAttachDebugInfo` behövs alltså inte alls — men den metoden
+  finns bekräftat bara på `IncrServer`, inte på `TypstCompiler`, så bytet är
+  ett sessionsmodellsbyte (`manipulateData`/återanvänd session), inte bara en
+  flagga. Försökte verifiera empiriskt (ett kastprov i `src/typst.js`, borttaget
+  igen) men körde in i samma Chromium-begränsning som redan är dokumenterad
+  nedan under Lärdomar — även appens vanliga kompilering misslyckas i den här
+  molnsessionens symlänkade Chromium. Detaljer:
+  https://github.com/elisgrahn/anteckningar/issues/3
 
 ## Väntar på Elis
 
@@ -113,6 +121,13 @@ Inget just nu.
   och symlänka binären `headless_shell` → `chrome-headless-shell` i den mappen.
   Aldrig committat — bara ett sätt att köra `npm test` interaktivt i sessionen
   när CI ändå laddar rätt revision själv.
+
+- **Samma symlänkade Chromium klarar inte typst-wasm-kompileringen i
+  webbläsaren**, upptäckt under M2-spiken: `net::ERR_TUNNEL_CONNECTION_FAILED`
+  redan vid typsnittsladdning, innan appens egen kod ens är inblandad.
+  `draw.spec.js` märker inte av det eftersom figurinfogning inte väntar på en
+  lyckad kompilering — bara `npm run dev`/en riktig webbläsare kan alltså
+  verifiera något som rör `src/typst.js` i den här molnmiljön just nu.
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.
