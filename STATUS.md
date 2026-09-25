@@ -4,30 +4,41 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Läge
 
-Skeppat senast: issue #14 punkt 1–3 (#17) — rita direkt ovanpå en placerad
-figur fyller nu på den i stället för att skapa en ny ovanpå; punkt 2 och 3
-var redan uppfyllda av befintlig kod. Innan dess: Elis processinstruktion
-(VISION.md, `prio`/`observation`-etiketter, issue #14) och
-teckensnittsfixen i `src/typst.js` (#11–#13, #15). Nästa uppgift: punkt 4
-i #14 (klistra in bild — kräver ett beslut, rör invariant 2) eller
-M2-implementationen (inte längre blockerad av molnmiljön). Väntar på Elis:
-inget beslut blockerar; #14 väntar på hans test på iPaden under en riktig
-föreläsning innan den kan stängas. En begränsning flaggad: sessionen kan
-inte radera grenar (se "Väntar på Elis"), elva väntar på manuell städning.
+Skeppat senast: en definitiv slutsats på M2:s öppna fråga (issue #3) — dagens
+npm-paket kan inte emittera spann, oavsett JS-anrop, för `SHOULD_ATTACH_
+DEBUG_INFO` är en Rust-**konstant**, inte en körtidsflagga. Kräver en egen
+wasm-modul, precis vad VISION.md redan sa. Ingen kod skriven än, bara
+research (se Lärdomar för detaljerna). Innan dess: issue #14 punkt 1–3
+(#17), och Elis processinstruktion + teckensnittsfixen (#11–#13, #15).
+
+**Pågående diskussion med Elis:** M5 (⛔, server som inte kräver hemdatorn)
+— han vill undvika Supabase, föreslog Google Drive i stället (klienten
+pratar direkt mot Drive-API:t, ingen egen backend alls). Jag höll med och
+la fram en design; han vill tänka mer innan han bestämmer. Inget byggt än.
+
+Nästa uppgift: bygga och mäta den egna wasm-modulen (M2, kräver `wasm-pack`
++ `wasm32`-target, inte installerat än men `cargo`/`rustc` finns), eller
+vänta på Elis besked om M5, eller punkt 4 i #14 (kräver ett beslut, rör
+invariant 2). Väntar på Elis: M5-beslutet, och #14 väntar på hans test på
+iPaden under en riktig föreläsning innan den kan stängas. En begränsning
+flaggad: sessionen kan inte radera grenar, elva väntar på manuell städning.
 
 ## Nu
 
 M0 och M4 är klara och sammanslagna. M1 avfärdat av Elis — testsviten och
 git-historiken räcker som skyddsnät, ingen Vercel-koppling görs (se Klart).
-M2 (⛔) pågår, inte längre blockerad: teckensnittsfixen (se Klart och
-Lärdomar) gör att `src/typst.js` går att köra och verifiera i den här
-molnmiljön igen. Näst steg: skriv M2-implementationen (baserad på
-källkodsläsningen i issue #3), be Elis om en testbegäran på hans egen dator
-innan sammanslagning. M3 väntar på att M2 blir klar. Issue #14 (`prio`,
-figurflödet mot GoodNotes-omvägen, oberoende av M2/synken): punkt 1–3
-klara (#17), punkt 4 kvar men kräver ett beslut av Elis (rör invariant 2),
-och själva issuen väntar på Elis test på iPaden under en riktig
-föreläsning innan den kan stängas. Elis instruktion om process (VISION.md,
+M2 (⛔): teckensnittsfixen gör att `src/typst.js` går att köra och verifiera
+i den här molnmiljön igen, och den körningen gav nu ett definitivt svar på
+den sista öppna frågan (se Läge och Lärdomar) — ingen väg runt en egen
+wasm-modul. Näst steg: patcha `SHOULD_ATTACH_DEBUG_INFO` i en fork av
+typst.ts, bygg med `wasm-pack` för `wasm32`, mät storleken (M2:s eget
+klart-kriterium för spiken). M3 väntar på att M2 blir klar. Issue #14
+(`prio`, figurflödet mot GoodNotes-omvägen, oberoende av M2/synken):
+punkt 1–3 klara (#17), punkt 4 kvar men kräver ett beslut av Elis (rör
+invariant 2), och själva issuen väntar på Elis test på iPaden under en
+riktig föreläsning innan den kan stängas. M5 (⛔, server utan hemdator):
+Elis vill undvika Supabase, diskuterar en Google Drive-lösning i stället —
+väntar på hans beslut, inget byggt. Elis instruktion om process (VISION.md,
 etiketter, issue #14, grenstädning) genomförd, se Klart.
 
 ## Klart
@@ -123,11 +134,30 @@ etiketter, issue #14, grenstädning) genomförd, se Klart.
   Punkt 4 (klistra in bild, rör invariant 2) och issuens eget klart-kriterium
   (Elis test på iPaden under en riktig föreläsning) är kvar — se issuen.
   Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/17
+- **M2, spikens tredje omgång — definitivt svar, ingen väg runt en egen
+  wasm-modul.** Körde själv (molnmiljön klarar det nu, se fixen ovan) det
+  test som en tidigare runda skrev som en testbegäran till Elis. Två JS-fel
+  i vägen fixade under körningen: `compile()`s returvärde är `{result:
+  bytes}` när diagnostics-formatet inte är noll — den publika wrappern kan
+  aldrig begära format 0 — och renderaren vill ha den uppackade `.result`,
+  inte hela objektet. Med det fixat: `getSourceLoc` kastar `out of bound
+  access ... page_sources ... actual: 0`, inte en krasch. Klonade
+  `Myriad-Dreamin/typst.ts` och spårade orsaken: `Feat::
+  SHOULD_ATTACH_DEBUG_INFO` är en Rust-**konstant**, hårdkodad `false` i
+  alla publicerade `ExportFeature`-implementationer
+  (`crates/conversion/vec2svg/src/frontend/incremental.rs:25` m.fl.) —
+  `IncrServer::set_should_attach_debug_info(true)` sätter bara den andra
+  halvan av ett `&&`, körtidsflaggan. Ingen JS-anropad metod kan ändra en
+  Rust-konstant. Definitivt: dagens npm-paket kan inte emittera spann,
+  punkt slut. Detaljer: https://github.com/elisgrahn/anteckningar/issues/3
 
 ## Väntar på Elis
 
-Inget beslut blockerar arbetet. Två saker att känna till:
-
+- **M5-beslutet.** Han vill undvika Supabase. Diskuterat: klienten pratar
+  direkt mot Google Drive-API:t (OAuth i webbläsaren, `drive.file`-scope),
+  ingen egen backend alls — bara statisk hosting kvar att lösa (Vercel
+  eller vad som är enklast). Han vill tänka mer innan han bestämmer sig;
+  inget byggs förrän han svarar.
 - Issue #14 väntar på Elis eget test på iPaden under en riktig föreläsning
   innan den kan stängas (dess klart-kriterium, inte något kod kan
   verifiera åt honom).
@@ -211,9 +241,16 @@ Inget beslut blockerar arbetet. Två saker att känna till:
   `claude/youthful-hawking-7la1ks` (#1), `vision/mattstocken` (#11),
   `vision/arbetssatt` (#12), `vision/hur-elis-involveras` (#13),
   `fix/typst-default-font-assets` (#15),
-  `feat/continue-placed-figure-on-tap` (#17). `status/branch-cleanup-list`
-  (#16) och den här sessionens egen `status/session-wrap` tillkommer också
-  så fort de är sammanslagna.
+  `feat/continue-placed-figure-on-tap` (#17), `status/branch-cleanup-list`
+  (#16), `status/session-wrap` (#18). Den här PR:ens egen gren tillkommer
+  också så fort den är sammanslagen.
+
+- **`cargo`/`rustc` finns i molnmiljön (1.94.1), men `wasm-pack` och
+  `wasm32-unknown-unknown`-target gör det inte.** Behövs för M2:s riktiga
+  spik (bygga en patchad `typst-ts-web-compiler`/`-renderer`). Inte
+  installerat i den här sessionen — nästa som tar M2 vidare behöver
+  `rustup target add wasm32-unknown-unknown` och `cargo install wasm-pack`
+  (eller `npm i -g wasm-pack`) innan `wasm-pack build` går att köra.
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.
