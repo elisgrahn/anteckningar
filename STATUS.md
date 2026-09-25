@@ -4,14 +4,12 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Läge
 
-Skeppat senast: teckensnittsfixen i `src/typst.js` (PR nedan) — den lösning
-molnmiljöns "Chromium klarar inte wasm-kompilering" egentligen behövde, ingen
-nätverksundantag. Sex VISION.md/process-PR:er från Elis instruktion väntar på
-CI + sammanslagning: Måttstocken, tre nya arbetssättspunkter, nya
-frågeregler (AskUserQuestion i stället för GitHub), plus fixen ovan. Issue
-#14 (`prio`) skapad: figurflödet ska slå GoodNotes-omvägen. Nästa uppgift:
-den issuen, oberoende av M2/synken. Väntar på Elis: inget beslut blockerar —
-se "Väntar på Elis" för en flaggad begränsning (grenstädning).
+Skeppat senast: Elis processinstruktion (VISION.md-ändringarna, `prio`- och
+`observation`-etiketter, issue #14) och teckensnittsfixen i `src/typst.js` —
+alla fyra PR:er sammanslagna (#11–#13, #15). Nästa uppgift: issue #14,
+figurflödet ska slå GoodNotes-omvägen — oberoende av M2/synken. Väntar på
+Elis: inget beslut blockerar. En begränsning flaggad: sessionen kan inte
+radera grenar (se "Väntar på Elis"), tio väntar på manuell städning.
 
 ## Nu
 
@@ -21,8 +19,10 @@ M2 (⛔) pågår, inte längre blockerad: teckensnittsfixen (se Klart och
 Lärdomar) gör att `src/typst.js` går att köra och verifiera i den här
 molnmiljön igen. Näst steg: skriv M2-implementationen (baserad på
 källkodsläsningen i issue #3), be Elis om en testbegäran på hans egen dator
-innan sammanslagning. M3 väntar på att M2 blir klar. Elis instruktion om
-process (VISION.md, etiketter, issue #14, grenstädning) genomförd, se Klart.
+innan sammanslagning. M3 väntar på att M2 blir klar. Utöver M2 väntar issue
+#14 (`prio`): figurflödet ska slå GoodNotes-omvägen, oberoende av M2/synken.
+Elis instruktion om process (VISION.md, etiketter, issue #14, grenstädning)
+genomförd, se Klart.
 
 ## Klart
 
@@ -111,7 +111,7 @@ Inget beslut. En begränsning värd att känna till: den här sessionens
 GitHub-åtkomst kan skapa och stänga grenar men inte radera dem — `git push
 origin --delete` och `DELETE /repos/.../git/refs/heads/...` gav båda 403
 ("Write access to this GitHub API path is not permitted through this
-proxy"). Sex sammanslagna grenar väntar på städning (se Lärdomar för
+proxy"). Tio sammanslagna grenar väntar på städning (se Lärdomar för
 listan) — Elis kan radera dem i GitHubs branch-lista på tio sekunder, eller
 säga åt en session med annan behörighet att göra det.
 
@@ -180,11 +180,13 @@ säga åt en session med annan behörighet att göra det.
   origin --delete <gren>` och `DELETE /repos/.../git/refs/heads/<gren>` gav
   403 ("Write access to this GitHub API path is not permitted through this
   proxy"), även efter att auto-mode-klassificeraren själv godkänt
-  kommandot. Ingen känd väg runt det från en session. Sex sammanslagna
+  kommandot. Ingen känd väg runt det från en session. Tio sammanslagna
   grenar väntar på manuell städning (PR:erna är redan stängda, bara grenen
   kvar): `claude/jolly-gates-7wbpxc` (#4), `status/m4-merged` (#5),
   `status/m2-spike` (#6), `m2-span-patch` (#7), `m2-experiment-notes` (#8),
-  `claude/youthful-hawking-7la1ks` (#1).
+  `claude/youthful-hawking-7la1ks` (#1), `vision/mattstocken` (#11),
+  `vision/arbetssatt` (#12), `vision/hur-elis-involveras` (#13),
+  `fix/typst-default-font-assets` (#15).
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.
