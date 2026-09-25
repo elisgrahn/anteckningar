@@ -4,15 +4,16 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Nu
 
-M0 och M4 är klara och sammanslagna. M1 avfärdat av Elis — testsviten och
-git-historiken räcker som skyddsnät, ingen Vercel-koppling görs (se Klart).
-M2 (⛔) pågår: Elis bekräftade att `sourcemap.js`-hackets begränsningar
-faktiskt stört honom, om än i begränsad mängd, och godkände den avgränsade
-patchen. Spikens tredje omgång körde in i molnmiljöns Chromium-begränsning
-(se Lärdomar) — kan inte verifieras empiriskt här. Näst steg: skriv
-implementationen ändå (baserad på källkodsläsningen i issue #3), be Elis
-om en testbegäran på hans egen dator innan sammanslagning. Inget väntar på
-ett svar just nu. M3 väntar på att M2 blir klar.
+M0, M4 och M7 är klara. M1 avfärdat av Elis — testsviten och git-historiken
+räcker som skyddsnät, ingen Vercel-koppling görs (se Klart). M2 (⛔): kan
+inte verifieras empiriskt i den här molnmiljön (se Lärdomar), så i stället
+för att gissa en implementation väntar en liten testbegäran hos Elis
+(issue #3, ~5 minuter på hans egen dator) på svar — den avgör om spannet
+redan går att slå upp utan en Rust-patch. M3 väntar på M2. M6 (⛔): nytt
+designförslag (issue #9) väntar på Elis — bara vilket namn dagens
+`document/`-mapp ska få som projekt är den blockerande frågan. Näst på tur
+medan båda väntar: M8 (penna på datorn) — behöver Wacom-hårdvara att testa
+mot, så en testbegäran där blir sannolikt sista steget även för den.
 
 ## Klart
 
@@ -38,6 +39,20 @@ ett svar just nu. M3 väntar på att M2 blir klar.
   samma bas-`mtime` direkt mot fil-API:t och kontrollerar att den andra
   hamnar i en konfliktfil på disk i stället för att skriva över den första.
   Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/4
+- **M7.** "New page" i huvudet öppnar samma ritläge som `Cmd-I` men med en
+  `pageSize`-prop (`Canvas.jsx`, A4 i punkter) och en centrerad
+  "pappersark"-yta i stället för att fylla hela rutan. Done infogar
+  `#pagebreak()` + figuren + `#pagebreak()` som en rad — ingen ankring,
+  ingen `#place`, sidan lever i flödet som vilken `#image` som helst.
+  `ink.js`s `toSvg(strokes, fixedSize)` skriver den fasta storleken i
+  stället för att härleda den ur bläckets ram, så en tom eller nästan tom
+  sida ändå blir sidstor. Två test: `e2e/page-draw.spec.js` ritar ett
+  pennstreck och kontrollerar att raden får rätt `#pagebreak()`-omslag
+  (verifierat att det fångar en trasig infogning: bytte tillfälligt till
+  vanlig `figureCode` i `finishCanvas`, testet slog rött, återställt innan
+  commit), och ett andra test kör riktig `typst compile` på en liten fixtur
+  och kontrollerar att exakt tre sidor kommer ut (text, den ritade sidan,
+  text) — mätt, inte antaget.
 - **M1, avfärdat.** Elis: testsviten + git-historiken räcker, han behöver
   inte kunna kolla en PR från iPaden före sammanslagning. Ingen
   Vercel-koppling görs. https://github.com/elisgrahn/anteckningar/issues/2
@@ -71,7 +86,12 @@ ett svar just nu. M3 väntar på att M2 blir klar.
 
 ## Väntar på Elis
 
-Inget just nu.
+- **M2 (⛔, blockerar M3).** Testbegäran, ~5 minuter: kör ett litet
+  konsolskript och klistra in vad det skriver ut.
+  https://github.com/elisgrahn/anteckningar/issues/3
+- **M6 (⛔, blockerar inget annat).** Designförslag klart; bara namnet på
+  dagens projekt är den blockerande frågan.
+  https://github.com/elisgrahn/anteckningar/issues/9
 
 ## Lärdomar
 

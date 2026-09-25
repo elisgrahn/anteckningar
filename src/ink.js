@@ -102,14 +102,20 @@ export function figureSize(strokes) {
   };
 }
 
-export function toSvg(strokes) {
+// fixedSize (points) is for a full handwritten page (M7): the exported size is
+// the page itself, not the ink's own bounding box, so a page stays page-sized
+// however little or however much of it was drawn on, and the ink keeps the
+// position it was drawn at instead of being shifted into a corner.
+export function toSvg(strokes, fixedSize) {
   const b = bounds(strokes);
-  const pad = padding(strokes);
-  const w = Math.round(b.x1 - b.x0 + pad * 2);
-  const h = Math.round(b.y1 - b.y0 + pad * 2);
+  const pad = fixedSize ? 0 : padding(strokes);
+  const w = fixedSize ? Math.round(fixedSize.width * SCALE) : Math.round(b.x1 - b.x0 + pad * 2);
+  const h = fixedSize ? Math.round(fixedSize.height * SCALE) : Math.round(b.y1 - b.y0 + pad * 2);
+  const shiftX = fixedSize ? 0 : b.x0 - pad;
+  const shiftY = fixedSize ? 0 : b.y0 - pad;
   const shift = (s) => ({
     ...s,
-    points: s.points.map((p) => ({ x: p.x - b.x0 + pad, y: p.y - b.y0 + pad })),
+    points: s.points.map((p) => ({ x: p.x - shiftX, y: p.y - shiftY })),
   });
   const paths = strokes
     .map(shift)

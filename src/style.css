@@ -117,7 +117,20 @@ main > section { min-width: 0; overflow: hidden; }
 .overlay-bar .right { display: flex; gap: 6px; margin-left: auto; padding: 0; overflow: visible; }
 
 .overlay-canvas { flex: 1; min-height: 0; position: relative; }
+.overlay-canvas .fill { position: absolute; inset: 0; }
 .overlay-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* A full handwritten page (M7): a sheet of paper centered in the available
+   space, at the document's own page size, instead of the freeform canvas
+   filling edge to edge. */
+.overlay-canvas-center { display: flex; align-items: center; justify-content: center; padding: 16px; background: #e9e9e9; }
+.overlay-canvas-center .sheet {
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
 
 /* The name of the shape that just snapped. The flash on the canvas is the
    fast feedback, this says what happened. */

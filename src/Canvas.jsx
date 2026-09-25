@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { toSvg, pathFromOutline, outlineOf } from './ink.js';
+import { toSvg, pathFromOutline, outlineOf, SCALE } from './ink.js';
 import * as draw from './strokes.js';
+
+// A4 in points, matching `#set page(paper: "a4")` in document/main.typ. A
+// full handwritten page (M7) is sized to this regardless of paper the
+// document actually sets — good enough until multiple paper sizes matter.
+export const A4_PT = { width: 595.28, height: 841.89 };
 
 export const COLORS = ['#16233d', '#b03030', '#1c6b45'];
 export const PEN_WIDTH = 2.4;
@@ -47,7 +52,7 @@ export function paint(ctx, width, height, strokes, flash) {
   }
 }
 
-export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
+export default function Canvas({ initialStrokes, name, onDone, onCancel, pageSize }) {
   const boxRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -63,6 +68,13 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
   const colorRef = useRef(color);
   colorRef.current = color;
 
+  // Drawn pixels per CSS pixel. 1 with no pageSize (today's behaviour: a
+  // sketch's exported size follows the ink itself, not the box). With a
+  // pageSize the box is the page at whatever size it happens to be shown on
+  // screen, so a stroke has to be rescaled into page-relative drawn pixels or
+  // it would land at the wrong spot once exported at the fixed page size.
+  const scaleRef = useRef(1);
+
   // The size is measured on the container, never on the canvas that is resized
   useEffect(() => {
     const box = boxRef.current;
@@ -75,13 +87,14 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
       c.height = Math.round(r.height * dpr);
       const ctx = c.getContext('2d', { desynchronized: true });
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      scaleRef.current = pageSize ? (pageSize.height * SCALE) / r.height : 1;
       s.current.dirty = true;
     };
     setup();
     const ro = new ResizeObserver(setup);
     ro.observe(box);
     return () => ro.disconnect();
-  }, []);
+  }, [pageSize]);
 
   // The wrist must not be able to select or scroll while the pen is in the air
   useEffect(() => {
@@ -165,7 +178,13 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
 
   const done = () => {
     if (!s.current.strokes.length) return onCancel();
-    onDone(toSvg(s.current.strokes), s.current.strokes);
+    // Captured in CSS pixels of the box (like the freeform canvas always has);
+    // rescaled into page-relative drawn pixels only here, at export, so the
+    // render loop above needs no separate transform for this mode.
+    const k = scaleRef.current;
+    const strokes =
+      k === 1 ? s.current.strokes : s.current.strokes.map((st) => ({ ...st, points: st.points.map((p) => ({ x: p.x * k, y: p.y * k })) }));
+    onDone(toSvg(strokes, pageSize), strokes);
   };
 
   // The keyboard is the tool switcher, since the pencil's double tap and
@@ -218,16 +237,22 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel }) {
           </button>
         </div>
       </div>
-      <div ref={boxRef} className="overlay-canvas">
-        <canvas
-          ref={canvasRef}
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
-          onContextMenu={(e) => e.preventDefault()}
-          style={{ touchAction: 'none' }}
-        />
+      <div className={pageSize ? 'overlay-canvas overlay-canvas-center' : 'overlay-canvas'}>
+        <div
+          ref={boxRef}
+          className={pageSize ? 'sheet' : 'fill'}
+          style={pageSize ? { aspectRatio: `${pageSize.width} / ${pageSize.height}` } : undefined}
+        >
+          <canvas
+            ref={canvasRef}
+            onPointerDown={onDown}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            onPointerCancel={onUp}
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ touchAction: 'none' }}
+          />
+        </div>
       </div>
     </div>
   );
