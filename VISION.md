@@ -33,6 +33,20 @@ föreläsningar. Det kräver att editorn känns lika bra som typst.app, att inge
 försvinner, att flera kurser går att hålla isär och att handskrivna sidor
 fungerar.
 
+## Måttstocken
+
+Utan appen antecknar Elis i typst.app och ritar figurer i GoodNotes,
+markerar området, tar en skärmbild, kopierar och klistrar in i typst.app,
+som laddar upp filen och skriver `#image` automatiskt. Varje funktion som
+rör figurer ska vara snabbare än den omvägen, annars används den inte.
+
+Omvägens svagheter, som appen ska lösa:
+
+- Att uppdatera en figur när föreläsaren bygger vidare kräver hela
+  omvägen igen.
+- Bilden blir sidbred oavsett hur stor figuren är.
+- Det går inte att rita direkt på utfallet.
+
 ## Invarianter
 
 Brytas bara efter uttryckligt godkännande från Elis.
@@ -94,45 +108,66 @@ sidbrytningar. Zoom i förhandsvisningen tills det visar sig behövas.
   väntar på honom.
 - **Hellre liten och klar än stor och halvfärdig.** Dela upp en milstolpe i
   PR:er som var för sig lämnar appen fungerande.
+- **Kolla issues i början av varje session.** Issues med etiketten `prio`
+  går före milstolparna. Issues med etiketten `observation`, och andra
+  issues från Elis, är råmaterial: omvandla dem till konkreta issues,
+  prioritera in dem, svara kort vad som blev av dem och stäng dem.
+- **Lös miljöproblem själv.** Kan något inte verifieras i molnmiljön är
+  det teamets problem att ändra miljön eller testupplägget, inte att
+  skicka verifieringen till Elis. Kräver lösningen hans behörighet,
+  ställ ett beslut.
+- **Städa efter dig.** Radera grenen när en PR är sammanslagen eller
+  stängd.
 
 ## Hur Elis involveras
 
-Elis är dålig på att följa upp, så frågorna till honom ska vara få, korta och
-gå att besvara från telefonen. Tre sorters meddelanden, och inga andra:
+**Elis är CTO, inte projektledare.** Han sätter riktning, fattar beslut
+och testar. Han skapar inga uppgifter åt teamet och läser inte STATUS.md
+i detalj. Han startar sessioner själv när han får frågan om nästa steg.
+
+Frågorna till honom ska vara få, korta och gå att besvara från telefonen.
+Tre sorters meddelanden, och inga andra:
 
 **1. Antagande — blockerar inte.**
 När något är oklart men går att ändra senare: välj det rimligaste, skriv vad
 du valde och varför i en mening, och fortsätt. Elis kan protestera i efterhand.
-
-> Antar att färgväljaren ska ligga kvar i verktygsraden även på datorn.
-> Fortsätter så om du inte säger annat.
+Antaganden ställs aldrig som frågor, de skrivs i PR-beskrivningen.
 
 **2. Testbegäran — blockerar bara den PR:en.**
-När något måste kännas efter på riktig hårdvara. Högst tio minuter, en länk och
-en numrerad lista med vad som ska göras och vad som ska hända. Fortsätt med
-nästa uppgift under tiden.
-
-> Testa på iPaden (5 min): [länk]
-> 1. Rita en pil med pennan bredvid ett stycke. Den ska synas direkt.
-> 2. Vila handen på skärmen medan du ritar. Inga extra streck ska uppstå.
-> Svara "funkar" eller vad som hände.
+När något måste kännas efter på riktig hårdvara. Högst tio minuter. Fortsätt
+med nästa uppgift under tiden.
 
 **3. Beslut — blockerar.**
 Bara för ⛔-milstolpar, ändringar av en invariant, nya tunga beroenden, och
-ändringar av data som redan finns på disk. Ge två eller tre alternativ, ett
-rekommenderat, och vad som händer om Elis inte svarar.
+ändringar av data som redan finns på disk.
 
-> M1 kan byggas med Yjs eller Automerge. Jag rekommenderar Yjs: färdig
-> CodeMirror-bindning och en Rust-port (yrs) till M3. Svara A eller B.
-> Utan svar jobbar jag vidare med buggar och M2 under tiden.
+**Frågor ställs med AskUserQuestion** i sessionen, så att Elis kan svara
+med ett tryck efter en notis i Claude-appen. Inte i GitHub.
+
+- Gör först allt som inte beror på svaret. Ställ sedan alla frågor i
+  ett och samma anrop.
+- Beslut: 2–4 alternativ, det rekommenderade först och märkt
+  "(rekommenderas)".
+- Testbegäran: instruktion och länk i frågetexten, högst tio minuter,
+  alternativen "Funkar" och "Funkar inte" (Elis beskriver felet i
+  fritext).
+- Antaganden ställs aldrig som frågor, de skrivs i PR-beskrivningen.
 
 Samla hellre ihop frågor än att skicka dem en och en. Finns det redan två
 obesvarade beslut, starta inget nytt som beror på dem; ta något annat ur listan.
 
-**Var frågorna ställs.** Testbegäran och beslut skrivs som en kommentar i
-PR:en, eller i en issue om det inte finns någon PR, och börjar alltid med
-`@elisgrahn` så att han får en notis i GitHub-appen. Antaganden räcker att
-skriva i PR-beskrivningen.
+**Läge.** Överst i STATUS.md finns en sektion "Läge" på högst tio rader:
+skeppat senast, nästa uppgift, vad som väntar på Elis. Den skrivs om,
+inte kompletteras.
+
+**Varje session avslutas med en fråga om nästa steg.** När uppgiften är
+klar, eller inget mer går att göra utan Elis svar: uppdatera STATUS.md
+och Läge, skriv Läge i chatten, och ställ en AskUserQuestion med förslag
+på nästa uppgift. 2–3 alternativ enligt prioriteringen, det
+rekommenderade först, plus "Pausa". Obesvarade beslut och testbegäran
+ställs i samma anrop. Väljer Elis en uppgift, fortsätt i samma session
+om kontexten räcker, annars skriv en kort startinstruktion för en ny
+session.
 
 ## Mellan sessioner
 

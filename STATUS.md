@@ -2,18 +2,40 @@
 
 Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
+## Läge
+
+Skeppat senast: M7 (handskrivna sidor, #10) och en definitiv slutsats på
+M2:s öppna fråga (issue #3) — dagens npm-paket kan inte emittera spann,
+oavsett JS-anrop, för `SHOULD_ATTACH_DEBUG_INFO` är en Rust-**konstant**,
+inte en körtidsflagga. Kräver en egen wasm-modul, precis vad VISION.md
+redan sa. Ingen kod skriven än för den, bara research (se Lärdomar).
+
+**Pågående diskussion med Elis:** M5 (⛔, server som inte kräver hemdatorn)
+— han vill undvika Supabase, föreslog Google Drive i stället. Ingen har
+frågat honom om M6 (⛔, filträd) än via `AskUserQuestion` — den frågan
+ligger bara som en GitHub-kommentar från innan processreglerna ändrades
+(issue #9), och bör ställas om.
+
+Nästa uppgift: bygga och mäta den egna wasm-modulen (M2, `wasm-pack` +
+`wasm32`-target saknas än), M8 (penna på datorn, oberoende av M2/M5/M6),
+eller punkt 4 i #14 (kräver ett beslut, rör invariant 2). Väntar på Elis:
+M5-beslutet, M6-frågan (bör ställas på nytt via `AskUserQuestion`), och
+#14 väntar på hans test på iPaden under en riktig föreläsning.
+
 ## Nu
 
-M0, M4 och M7 är klara. M1 avfärdat av Elis — testsviten och git-historiken
-räcker som skyddsnät, ingen Vercel-koppling görs (se Klart). M2 (⛔): kan
-inte verifieras empiriskt i den här molnmiljön (se Lärdomar), så i stället
-för att gissa en implementation väntar en liten testbegäran hos Elis
-(issue #3, ~5 minuter på hans egen dator) på svar — den avgör om spannet
-redan går att slå upp utan en Rust-patch. M3 väntar på M2. M6 (⛔): nytt
-designförslag (issue #9) väntar på Elis — bara vilket namn dagens
-`document/`-mapp ska få som projekt är den blockerande frågan. Näst på tur
-medan båda väntar: M8 (penna på datorn) — behöver Wacom-hårdvara att testa
-mot, så en testbegäran där blir sannolikt sista steget även för den.
+M0, M1 (avfärdad), M4 och M7 är klara. M2 (⛔): definitivt svar — en egen
+wasm-modul krävs, ingen väg runt det. Näst steg: patcha
+`SHOULD_ATTACH_DEBUG_INFO` i en fork av typst.ts, bygg med `wasm-pack` för
+`wasm32`, mät storleken (M2:s eget klart-kriterium för spiken). M3 väntar
+på M2. M6 (⛔): designförslag klart (issue #9), väntar bara på vilket namn
+dagens `document/`-mapp ska få som projekt — frågan är ställd som en
+GitHub-kommentar från innan `AskUserQuestion`-regeln, bör ställas om.
+Issue #14 (`prio`): punkt 1–3 klara (#17), punkt 4 kvar (beslut, rör
+invariant 2), och själva issuen väntar på Elis test på iPaden under en
+riktig föreläsning. M5 (⛔, server utan hemdator): Elis diskuterar Google
+Drive i stället för Supabase, väntar på hans beslut. M8 saknar beroenden
+till M1–M6 och kan påbörjas när som helst.
 
 ## Klart
 
@@ -52,46 +74,91 @@ mot, så en testbegäran där blir sannolikt sista steget även för den.
   vanlig `figureCode` i `finishCanvas`, testet slog rött, återställt innan
   commit), och ett andra test kör riktig `typst compile` på en liten fixtur
   och kontrollerar att exakt tre sidor kommer ut (text, den ritade sidan,
-  text) — mätt, inte antaget.
+  text) — mätt, inte antaget. PR: https://github.com/elisgrahn/anteckningar/pull/10
 - **M1, avfärdat.** Elis: testsviten + git-historiken räcker, han behöver
   inte kunna kolla en PR från iPaden före sammanslagning. Ingen
   Vercel-koppling görs. https://github.com/elisgrahn/anteckningar/issues/2
   (stängd, "not planned").
-- **M2, spiken (två omgångar).** Läst källkoden på `Myriad-Dreamin/typst.ts`
-  (den `typst-ts-web-compiler`/`typst-ts-renderer` vi redan beror på, v0.7.0)
-  via GitHubs kodsökning och en lokal klon, inte gissat. Första fyndet:
-  `RenderSession.getSourceLoc(path)`/`data-span`-attributet på renderade
-  SVG-element är redan kompilerade in i vår nuvarande wasm-fil — ingen
-  ombyggnad krävs för att gå från ett klickat element till ett Typst-spann.
-  Andra fyndet, ännu bättre: den data som idag är tom (`page_source_mapping`,
-  det CLAUDE.md kallar tomt `page_sources`) fylls bara i om
-  `compiler.setAttachDebugInfo(true)` slås på — också en redan skickad
-  JS-metod, men bara på den **inkrementella** kompileringsvägen, som
-  `src/typst.js` inte använder idag (vi kör ett engångsanrop via
-  `runWithWorld`/`world.vector()`). Möjligen krävs alltså ingen Rust-patch
-  alls. Kvar att verifiera: om spann-id:t den vägen ger faktiskt går att slå
-  upp till rad/kolumn med en redan exponerad funktion, eller om det (som
-  `data-tid` redan är) bara är ett innehållsfingeravtryck som kräver den lilla
-  patchen från första spiken (`resolve_source_span` i
-  `crates/reflexo-typst/src/error.rs`, identifierad men inte skriven).
-  Tredje fyndet: `IncrServer::default()` sätter redan `should_attach_debug_info
-  = true`, `setAttachDebugInfo` behövs alltså inte alls — men den metoden
-  finns bekräftat bara på `IncrServer`, inte på `TypstCompiler`, så bytet är
-  ett sessionsmodellsbyte (`manipulateData`/återanvänd session), inte bara en
-  flagga. Försökte verifiera empiriskt (ett kastprov i `src/typst.js`, borttaget
-  igen) men körde in i samma Chromium-begränsning som redan är dokumenterad
-  nedan under Lärdomar — även appens vanliga kompilering misslyckas i den här
-  molnsessionens symlänkade Chromium. Detaljer:
+- **M6, designförslaget.** Fritt filträd som en platt lista projekt under
+  `notes/<namn>/` (samma `main.typ` + `figures/` som idag, en kurs med
+  flera föreläsningar är fortfarande en enda fil som `#include`:ar andra),
+  route-prefix `/api/:project/...`, klienten remountar hela `App` vid
+  projektbyte i stället för att bygga om synken för ett byte i farten.
+  Enda blockerande frågan: vilket namn dagens `document/` ska få.
+  https://github.com/elisgrahn/anteckningar/issues/9 (bör ställas om via
+  `AskUserQuestion`, se Väntar på Elis).
+- **M2, spiken (tre omgångar, definitivt svar).** Läst källkoden på
+  `Myriad-Dreamin/typst.ts` (den `typst-ts-web-compiler`/`-renderer` vi
+  redan beror på, v0.7.0) via GitHubs kodsökning och en lokal klon, inte
+  gissat. Slutsats: `Feat::SHOULD_ATTACH_DEBUG_INFO` är en Rust-**konstant**,
+  hårdkodad `false` i alla publicerade `ExportFeature`-implementationer
+  (`crates/conversion/vec2svg/src/frontend/incremental.rs:25` m.fl.) — ingen
+  JS-anropad metod (`setAttachDebugInfo`, `IncrServer`, inkrementell vs.
+  engångskompilering) kan ändra en Rust-konstant. `getSourceLoc` kastar
+  `out of bound access ... page_sources ... actual: 0` snarare än att ge
+  något upplösningsbart. Dagens npm-paket kan alltså inte emittera spann,
+  punkt slut — en egen wasm-modul krävs, precis vad VISION.md:s M2-rad
+  redan sa. Detaljer och alla tre spikomgångarna:
   https://github.com/elisgrahn/anteckningar/issues/3
+- **M2-blockeraren i en tidigare Lärdomar-post var fel diagnosticerad, nu
+  rättad och fixad.** "Chromium klarar inte typst-wasm-kompileringen"
+  stämde inte — `src/typst.js` bad `loadFonts(fonts)` om sina sex lokala
+  filer utan att säga att de var *hela* uppsättningen, och typst.ts
+  (`options.init.mjs`, `TypstCompilerDriver.init`) tolkar ett
+  `loadFonts`-anrop utan `{ assets: ... }` som "inga fonter angivna" och
+  lägger själv till sin egen ~20-filers standardpaket från
+  `cdn.jsdelivr.net` — en host molnmiljöns nätverkspolicy blockerar.
+  Fixat med `loadFonts(fonts, { assets: false })`, verifierat med en
+  instrumenterad Playwright-körning (17 jsdelivr-hämtningar och "Failed to
+  fetch" innan, en lyckad kompilering på 246 ms efter, inga externa
+  hämtningar alls). `npm run dev`/en riktig webbläsare mot appen fungerar
+  nu i den här molnmiljön. PR: https://github.com/elisgrahn/anteckningar/pull/15
+- **Elis instruktion om process genomförd.** VISION.md: ny sektion
+  "Måttstocken" (https://github.com/elisgrahn/anteckningar/pull/11), tre
+  punkter under "Hur teamet arbetar"
+  (https://github.com/elisgrahn/anteckningar/pull/12), och nya regler för
+  "Hur Elis involveras" — `AskUserQuestion` i sessionen i stället för
+  GitHub-kommentarer, "Läge" överst i STATUS.md, en fråga om nästa steg i
+  slutet av varje session
+  (https://github.com/elisgrahn/anteckningar/pull/13). Etiketterna `prio`
+  och `observation` skapade i repot. Issue #14 skapad med `prio`:
+  "Figurflödet ska slå GoodNotes-omvägen"
+  (https://github.com/elisgrahn/anteckningar/issues/14).
+- **Issue #14, punkt 1–3.** Rita direkt ovanpå en placerad, omarkerad figur
+  fyller nu på den (laddar in dess sparade streck och fortsätter på dem)
+  i stället för att skapa en ny, överlappande figur — samma `hitPlaced`-yta
+  som markering och drag redan använder. Punkt 2 (ny figur med en gest,
+  utan namngivning) och punkt 3 (storlek som följer ritningen, inte
+  sidbredden) var redan uppfyllda av befintlig kod vid genomläsning; ingen
+  ändring behövdes för dem. Verifierat manuellt mot en riktig kompilering:
+  två streck på samma plats gav en `#place`-rad och en figur med två
+  streck på disk, ett tredje streck på annan plats gav en riktig andra
+  figur. `e2e/continue-placed.spec.js` gör samma kontroll i testsviten.
+  Punkt 4 (klistra in bild, rör invariant 2) och issuens eget klart-kriterium
+  (Elis test på iPaden under en riktig föreläsning) är kvar — se issuen.
+  Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/17
 
 ## Väntar på Elis
 
-- **M2 (⛔, blockerar M3).** Testbegäran, ~5 minuter: kör ett litet
-  konsolskript och klistra in vad det skriver ut.
-  https://github.com/elisgrahn/anteckningar/issues/3
-- **M6 (⛔, blockerar inget annat).** Designförslag klart; bara namnet på
-  dagens projekt är den blockerande frågan.
-  https://github.com/elisgrahn/anteckningar/issues/9
+- **M5-beslutet.** Han vill undvika Supabase. Diskuterat: klienten pratar
+  direkt mot Google Drive-API:t (OAuth i webbläsaren, `drive.file`-scope),
+  ingen egen backend alls — bara statisk hosting kvar att lösa (Vercel
+  eller vad som är enklast). Han vill tänka mer innan han bestämmer sig;
+  inget byggs förrän han svarar.
+- **M6 (⛔, blockerar inget annat).** Designförslaget är klart (se Klart);
+  bara namnet på dagens `document/`-projekt är den blockerande frågan.
+  Ställd som en GitHub-kommentar innan `AskUserQuestion`-regeln fanns
+  (issue #9) — bör ställas om i en session.
+- Issue #14 väntar på Elis eget test på iPaden under en riktig föreläsning
+  innan den kan stängas (dess klart-kriterium, inte något kod kan
+  verifiera åt honom).
+- En begränsning i sessionens GitHub-åtkomst: den kan skapa och stänga
+  grenar men inte radera dem — `git push origin --delete` och `DELETE
+  /repos/.../git/refs/heads/...` gav båda 403 ("Write access to this
+  GitHub API path is not permitted through this proxy"). Tolv+ sammanslagna
+  grenar väntar på städning (se Lärdomar för listan) — Elis kan radera dem
+  i GitHubs branch-lista på tio sekunder, eller säga åt en session med
+  annan behörighet att göra det.
 
 ## Lärdomar
 
@@ -142,12 +209,40 @@ mot, så en testbegäran där blir sannolikt sista steget även för den.
   Aldrig committat — bara ett sätt att köra `npm test` interaktivt i sessionen
   när CI ändå laddar rätt revision själv.
 
-- **Samma symlänkade Chromium klarar inte typst-wasm-kompileringen i
-  webbläsaren**, upptäckt under M2-spiken: `net::ERR_TUNNEL_CONNECTION_FAILED`
-  redan vid typsnittsladdning, innan appens egen kod ens är inblandad.
-  `draw.spec.js` märker inte av det eftersom figurinfogning inte väntar på en
-  lyckad kompilering — bara `npm run dev`/en riktig webbläsare kan alltså
-  verifiera något som rör `src/typst.js` i den här molnmiljön just nu.
+- **Det var aldrig Chromium som blockerade typst-wasm-kompileringen i
+  webbläsaren — en tidigare session diagnosticerade fel.** Den symlänkade
+  Chromium klarar det fint. `net::ERR_TUNNEL_CONNECTION_FAILED` vid
+  typsnittsladdning kom av att `src/typst.js` anropade `loadFonts(fonts)`
+  utan `{ assets: false }` — typst.ts tolkade det som "inga fonter angivna"
+  och lade själv till sitt eget ~20-filers standardpaket från
+  `cdn.jsdelivr.net`, en host molnmiljöns nätverkspolicy blockerar. Fixat i
+  `src/typst.js` (se Klart); `npm run dev`/en riktig webbläsare mot appen
+  fungerar nu i den här molnmiljön, ingen begränsning kvar. Diagnosen togs
+  fram genom att instrumentera en headless körning (`page.on('requestfailed'
+  /'console'/...)`) i stället för att gissa vidare på tidigare hypoteser —
+  gör om det direkt nästa gång något liknande dyker upp, det tar minuter.
+
+- **Sessionens GitHub-åtkomst kan inte radera grenar.** Både `git push
+  origin --delete <gren>` och `DELETE /repos/.../git/refs/heads/<gren>` gav
+  403 ("Write access to this GitHub API path is not permitted through this
+  proxy"), även efter att auto-mode-klassificeraren själv godkänt
+  kommandot. Ingen känd väg runt det från en session. Sammanslagna grenar
+  som väntar på manuell städning (PR:erna är redan stängda, bara grenen
+  kvar): `claude/jolly-gates-7wbpxc` (#4), `status/m4-merged` (#5),
+  `status/m2-spike` (#6), `m2-span-patch` (#7), `m2-experiment-notes` (#8),
+  `claude/youthful-hawking-7la1ks` (#1), `vision/mattstocken` (#11),
+  `vision/arbetssatt` (#12), `vision/hur-elis-involveras` (#13),
+  `fix/typst-default-font-assets` (#15),
+  `feat/continue-placed-figure-on-tap` (#17), `status/branch-cleanup-list`
+  (#16), `status/session-wrap` (#18), och `m7-handwritten-pages` (#10) så
+  fort den PR:en är sammanslagen.
+
+- **`cargo`/`rustc` finns i molnmiljön (1.94.1), men `wasm-pack` och
+  `wasm32-unknown-unknown`-target gör det inte.** Behövs för M2:s riktiga
+  spik (bygga en patchad `typst-ts-web-compiler`/`-renderer`). Inte
+  installerat i den här sessionen — nästa som tar M2 vidare behöver
+  `rustup target add wasm32-unknown-unknown` och `cargo install wasm-pack`
+  (eller `npm i -g wasm-pack`) innan `wasm-pack build` går att köra.
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.

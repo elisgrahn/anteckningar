@@ -290,6 +290,17 @@ Radering tar bara bort raden; SVG:n ligger kvar och dyker upp i städlistan. Det
 Fylls en placerad figur på så att bläcket växer uppåt eller åt vänster flyttar
 sig figurens hörn, eftersom `toSvg` räknar om ramen. `dx`/`dy` justeras med samma
 belopp när ritläget stängs, annars glider figuren undan lika mycket som den växte.
+Samma korrigering (`continuePlaced` i `App.jsx`) gäller båda vägarna in: genom
+Canvas.jsx-dialogen (`finishCanvas`) och genom att rita direkt på sidan.
+
+**Ett förstatryck som landar på en omarkerad figur fyller på den**, i stället
+för att rita en ny figur ovanpå (`PageDraw.jsx`, `continuing`-refen). Träffen
+prövas bara vid själva nedtrycket och bara när ingenting redan ritas — figurens
+sparade streck laddas in i ritläget då, innan pennan ens rört sig, så att ett
+kort tryck som visar sig vara ett *val* i stället (inget drag) kan kasta den
+inlästa kopian ograverad. Samma `placed`-rektangel avgör träffen som redan
+används för markering och drag, så samma yta man kan dra i är den man kan
+fylla på i.
 
 ### Var figuren hamnar
 

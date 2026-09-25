@@ -33,9 +33,15 @@ async function start() {
   const compiler = createTypstCompiler();
   const renderer = createTypstRenderer();
 
+  // { assets: false }, not the no-arg form: without it typst.ts can't tell our
+  // six local fonts from "no fonts specified" and silently appends its own
+  // default pack — a fetch of ~20 files from cdn.jsdelivr.net on every boot,
+  // which both wastes a network round trip we don't need (public/fonts already
+  // has everything typst asks for) and breaks in any network that blocks that
+  // host, offline included.
   await compiler.init({
     getModule: () => new URL(compilerWasm, location.href),
-    beforeBuild: [loadFonts(fonts)],
+    beforeBuild: [loadFonts(fonts, { assets: false })],
   });
   await renderer.init({
     getModule: () => new URL(rendererWasm, location.href),

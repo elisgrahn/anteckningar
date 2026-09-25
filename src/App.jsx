@@ -272,6 +272,17 @@ export default function App() {
     ).map((r) => ({ ...r, href: figureInfo.get(r.path)?.href ?? null }));
   }, [source, layout, figureInfo]);
 
+  // Lets PageDraw load a placed figure's own strokes the moment the pen comes
+  // down on top of it, so drawing there continues that figure instead of
+  // starting an unrelated one on top of it.
+  const figureStrokes = useCallback(
+    (path) => {
+      const bytes = figures.get(path);
+      return bytes ? fromSvg(new TextDecoder().decode(bytes)) : null;
+    },
+    [figures],
+  );
+
   const openCanvas = useCallback(async () => {
     const existing = figureAtCursor(viewRef.current);
     if (existing) {
@@ -342,9 +353,21 @@ export default function App() {
     [layout],
   );
 
+  // A placed figure keeps its anchor while it is added to, but its corner
+  // moves if the new ink reaches further up or left — same correction
+  // finishCanvas does for the full-screen editor, needed here too since
+  // drawing straight on the page can grow a figure the same way.
+  const continuePlaced = useCallback((item, origin, strokes) => {
+    const now = strokes.length ? figureOrigin(strokes) : origin;
+    const dx = item.dx + (now.x - origin.x) / SCALE;
+    const dy = item.dy + (now.y - origin.y) / SCALE;
+    upsertLine(viewRef.current, `image("${item.path}")`, placeCode(item.path, dx, dy), item.line);
+  }, []);
+
   // Nothing waits for a save button: each finished stroke is written straight
   // through. Done only ends the grouping, so the next stroke starts a new
-  // figure instead of joining this one.
+  // figure instead of joining this one — unless it began on top of a figure
+  // already on the page, in which case it keeps adding to that one.
   const onPageStrokes = (data) => {
     clearTimeout(onPage.current?.timer);
     if (!data) {
@@ -352,9 +375,11 @@ export default function App() {
       return;
     }
     if (!onPage.current) {
-      onPage.current = { name: api.nextFigureName(sync.current.figures), flow: null };
+      onPage.current = data.continuing
+        ? { name: data.continuing.item.name, continuing: data.continuing }
+        : { name: api.nextFigureName(sync.current.figures), flow: null };
     }
-    const { name } = onPage.current;
+    const { name, continuing } = onPage.current;
     onPage.current.timer = setTimeout(async () => {
       const svgText = toSvg(data.strokes);
       const baseMtime = sync.current.figures[name];
@@ -363,12 +388,14 @@ export default function App() {
         figuresRef.current = next;
         setFigures(next);
       };
+      const place = () =>
+        continuing ? continuePlaced(continuing.item, continuing.origin, data.strokes) : placeFigure(name, data.strokes);
       try {
         const r = await api.saveFigure(name, svgText, baseMtime);
         sync.current.figures = { ...sync.current.figures, [name]: r.mtime };
         applyLocal();
         await queue.dequeue(queue.figureKey(name));
-        await placeFigure(name, data.strokes);
+        await place();
         if (r.conflict) setStatus('conflict: saved as ' + r.conflictFile);
       } catch (e) {
         if (api.isOffline(e)) {
@@ -377,7 +404,7 @@ export default function App() {
           // The stroke stays visible and anchored — only the copy on disk is
           // missing until the queue flushes.
           applyLocal();
-          await placeFigure(name, data.strokes);
+          await place();
           setStatus('offline: queued');
         } else {
           setStatus('figure not saved: ' + (e.message || e));
@@ -652,6 +679,7 @@ export default function App() {
               onMovePlaced={movePlaced}
               onDeletePlaced={deletePlaced}
               anchorAt={anchorAt}
+              figureStrokes={figureStrokes}
               scrollerRef={rightRef}
             />
           </div>
