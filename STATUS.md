@@ -6,8 +6,10 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 M0 och M4 är klara och sammanslagna. M1 och M2 väntar båda på Elis (se
 nedan) — M2 är ⛔ så M3 kan inte börja förrän Elis svarat på designförslaget.
-Näst på tur: M7 (handskrivna sidor) eller M8 (penna på datorn), som båda
-saknar beroenden till M1–M3 (M6 är också ⛔ och väntar på Elis).
+Spiken för M2 är klar (se Klart): frågan till Elis nu är bara om den
+återstående, mindre patchen är värd jobbet. Näst på tur medan det väntar:
+M7 (handskrivna sidor) eller M8 (penna på datorn), som båda saknar
+beroenden till M1–M3 (M6 är också ⛔ och väntar på Elis).
 
 ## Klart
 
@@ -33,14 +35,27 @@ saknar beroenden till M1–M3 (M6 är också ⛔ och väntar på Elis).
   samma bas-`mtime` direkt mot fil-API:t och kontrollerar att den andra
   hamnar i en konfliktfil på disk i stället för att skriva över den första.
   Sammanslagen: https://github.com/elisgrahn/anteckningar/pull/4
+- **M2, spiken.** Läst källkoden på `Myriad-Dreamin/typst.ts` (den
+  `typst-ts-web-compiler`/`typst-ts-renderer` vi redan beror på, v0.7.0) via
+  GitHubs kodsökning, inte gissat. Resultat: `RenderSession.getSourceLoc(path)`
+  och `data-span`-attributet på renderade SVG-element är **redan kompilerade
+  in** i vår nuvarande wasm-fil — ingen ombyggnad krävs för att gå från ett
+  klickat element till ett Typst-spann. Det spannet är dock ett opakt hex-tal;
+  att slå upp vilken rad/kolumn det pekar på saknar en JS-vänd funktion i vår
+  version av `typst-ts-web-compiler` (bara `query()` finns). M2 krymper alltså
+  till en riktad patch av just den ena funktionen + en egen ombyggd wasm-fil
+  för web-compilern, inte en hel `typst-ide`-integration. Detaljer och länkar
+  till exakta rader: https://github.com/elisgrahn/anteckningar/issues/3
 
 ## Väntar på Elis
 
-- **M1 (beslut, blockerar inte annat).** Behöver ett konto hos en
-  hostingtjänst för förhandsversioner per PR — inget en agent kan skapa själv.
+- **M1 (beslut, blockerar inte annat).** Elis har redan Vercel; näst steg är
+  att han kopplar in det på repot (Settings på vercel.com, ingen hemlighet
+  att klistra in här) — inget en agent kan göra åt honom.
   https://github.com/elisgrahn/anteckningar/issues/2
-- **M2 (⛔, blockerar M3).** Designförslag för egen typst+typst-ide-wasm med
-  spann, och hur figurankringen överlever utan `withMarkers`.
+- **M2 (⛔, blockerar M3).** Efter spiken (se ovan): är den kvarvarande
+  patchen av `typst-ts-web-compiler` värd jobbet, givet att `sourcemap.js`
+  fungerar och inte blockerar något annat just nu?
   https://github.com/elisgrahn/anteckningar/issues/3
 
 ## Lärdomar
