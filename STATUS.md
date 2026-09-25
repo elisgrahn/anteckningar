@@ -4,11 +4,11 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Nu
 
-M0 (Grund: testsvit + CI) är genomförd:
-https://github.com/elisgrahn/anteckningar/pull/1. Väntar på att CI går grönt
-på PR:en och, om inget annat väljs, på att den slås ihop automatiskt (M0 är
-inte ⛔, rör ingen invariant, och kräver inget manuellt test på riktig
-hårdvara).
+M1 och M2 väntar båda på Elis (se nedan). Under tiden: M4 (kö vid
+nätavbrott) är genomförd och väntar på CI/sammanslagning i sin PR.
+M2 är ⛔ så M3 kan inte börja förrän Elis svarat på designförslaget. Nästa
+lediga milstolpe efter M4 är M6 (⛔, väntar på Elis) eller M7/M8, som båda
+saknar beroenden till M1–M3.
 
 ## Klart
 
@@ -19,12 +19,31 @@ hårdvara).
   Verifierat under arbetet: `allowPointer` gjordes tillfälligt trasig för
   pennhändelser, pennstrecktestet slog då rött, och ändringen rullades
   tillbaka innan commit — testet fångar alltså faktiskt en trasig
-  ritfunktion, inte bara en tom smoke test.
-  PR: https://github.com/elisgrahn/anteckningar/pull/1
+  ritfunktion, inte bara en tom smoke test. Sammanslagen:
+  https://github.com/elisgrahn/anteckningar/pull/1
+- **M4.** Lokal kö (IndexedDB, `src/queue.js`) för skrivningar som inte når
+  servern på grund av ett nätverksfel — de köas i stället för att tappas, och
+  skickas så fort en poll lyckas igen. Varje skrivning bär `X-Base-Mtime`;
+  skiljer sig den från filens riktiga `mtime` på servern sparas den som en
+  konfliktkopia bredvid originalet (`writeVersioned` i `vite.config.js`) i
+  stället för att skriva över, så två enheter som skrivit i samma fil utan
+  nät mellan sig aldrig tappar den ena versionen. `e2e/queue.spec.js`:
+  ett test som blockerar `/api/doc`, skriver, väntar på att statusfältet
+  visar "not synced", släpper blockeringen och kontrollerar att texten når
+  servern efter nästa poll; och ett test som skickar två skrivningar mot
+  samma bas-`mtime` direkt mot fil-API:t och kontrollerar att den andra
+  hamnar i en konfliktfil på disk i stället för att skriva över den första.
+  PR: (öppnas i den här sessionen, se commit-historiken på
+  `claude/jolly-gates-7wbpxc`)
 
 ## Väntar på Elis
 
-Inget just nu.
+- **M1 (beslut, blockerar inte annat).** Behöver ett konto hos en
+  hostingtjänst för förhandsversioner per PR — inget en agent kan skapa själv.
+  https://github.com/elisgrahn/anteckningar/issues/2
+- **M2 (⛔, blockerar M3).** Designförslag för egen typst+typst-ide-wasm med
+  spann, och hur figurankringen överlever utan `withMarkers`.
+  https://github.com/elisgrahn/anteckningar/issues/3
 
 ## Lärdomar
 
@@ -64,6 +83,16 @@ Inget just nu.
   `ANTECKNINGAR_DOCUMENT_DIR` (default `document`, som förut) så att
   `playwright.config.js` kan peka dev-servern mot en tom mapp i
   `os.tmpdir()` under testkörning, rensad före varje körning.
+
+- **Chromium-revisionsmissmatchen (ovan) går att lappa lokalt utan nät**, om
+  `npx playwright install` inte når `cdn.playwright.dev` (blockerad i den här
+  molnmiljöns proxy). `/opt/pw-browsers/chromium-1194` eller
+  `chromium_headless_shell-1194` finns oftast kvar från en tidigare
+  installation; symlänka dess `chrome-linux`-mapp till den nya revisionens
+  förväntade sökväg (`chromium_headless_shell-<ny>/chrome-headless-shell-linux64`)
+  och symlänka binären `headless_shell` → `chrome-headless-shell` i den mappen.
+  Aldrig committat — bara ett sätt att köra `npm test` interaktivt i sessionen
+  när CI ändå laddar rätt revision själv.
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.

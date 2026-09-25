@@ -74,6 +74,22 @@ utan egen sanning. `document/` skapas och fylls med ett startdokument av
 `ensure()` om det saknas. Ett fritt filträd med flera kurser är planerat (M6 i
 `VISION.md`).
 
+**Kö vid nätavbrott (M4), `src/queue.js`.** Misslyckas ett sparförsök av ett
+nätverksfel (`api.isOffline`, ett `TypeError` från `fetch` självt — skilt från
+ett HTTP-felsvar, som inte köas) hamnar skrivningen i IndexedDB i stället för
+att försvinna. En nyckel per fil (`"doc"`, `"figure:f-01.svg"`) så ett andra
+offline-redigering ersätter den köade i stället för att stapla — bara det
+senaste innehållet betyder något, precis som den vanliga sparvägen redan
+fungerar. `flushQueue()` i `App.jsx` körs efter varje lyckad poll (alltså bara
+när servern faktiskt just svarat) och skickar det som ligger kvar.
+
+Varje skrivning bär `X-Base-Mtime`: vilken version den byggdes på. Skiljer sig
+det från filens `mtime` på servern (`writeVersioned` i `vite.config.js`) sparas
+den som en konfliktkopia bredvid originalet i stället för att skriva över — det
+är så invariant 7 hålls när en enhet varit offline länge nog att den andra
+hunnit skriva emellan. Ingen egen upplösning av konflikten; båda versionerna
+finns bara på disk.
+
 **Synk är poll + debounce, sista skrivningen vinner.** `App.jsx` håller hela
 modellen i `sync.current = { mtime, saved, figures, writing, loaded }`;
 skillnaden mellan `saved` (vad vi senast skickade) och `sourceRef.current` (vad

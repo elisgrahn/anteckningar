@@ -38,6 +38,33 @@ async function mtime(p) {
   }
 }
 
+// A write that names the version it was based on (X-Base-Mtime) and turns out
+// to be stale never overwrites what's on disk — it lands next to it instead,
+// so a device offline for a while can never silently erase what the other one
+// wrote (invariant 7). No header at all means the caller doesn't track a
+// version (there is none yet), so the write always goes through as before.
+function conflictPath(p) {
+  const ext = path.extname(p);
+  const base = p.slice(0, p.length - ext.length);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `${base}.conflict-${stamp}-${Math.random().toString(36).slice(2, 6)}${ext}`;
+}
+
+async function writeVersioned(p, text, baseMtime) {
+  if (baseMtime === undefined) {
+    await fs.writeFile(p, text);
+    return { mtime: await mtime(p) };
+  }
+  const current = await mtime(p);
+  if (current !== Number(baseMtime)) {
+    const conflict = conflictPath(p);
+    await fs.writeFile(conflict, text);
+    return { mtime: current, conflict: true, conflictFile: path.basename(conflict) };
+  }
+  await fs.writeFile(p, text);
+  return { mtime: await mtime(p) };
+}
+
 async function ensure() {
   await fs.mkdir(FIGURES, { recursive: true });
   try {
@@ -86,8 +113,9 @@ function fileApi() {
       }
 
       if (url.pathname === '/api/doc' && req.method === 'PUT') {
-        await fs.writeFile(MAIN, await body(req));
-        return json(res, 200, { mtime: await mtime(MAIN) });
+        const baseMtime = req.headers['x-base-mtime'];
+        const r = await writeVersioned(MAIN, await body(req), baseMtime);
+        return json(res, 200, r);
       }
 
       if (url.pathname.startsWith('/api/figure/')) {
@@ -98,8 +126,9 @@ function fileApi() {
           return json(res, 200, { svg: await fs.readFile(p, 'utf8'), mtime: await mtime(p) });
         }
         if (req.method === 'PUT') {
-          await fs.writeFile(p, await body(req));
-          return json(res, 200, { mtime: await mtime(p) });
+          const baseMtime = req.headers['x-base-mtime'];
+          const r = await writeVersioned(p, await body(req), baseMtime);
+          return json(res, 200, r);
         }
         // Deleting happens only on an explicit request from the cleanup list,
         // never automatically: a figure can be unused because the paragraph
