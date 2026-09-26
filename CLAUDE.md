@@ -163,8 +163,11 @@ från en webbsida — `E` hålls nere för sudd i stället.
 
 Strecken ritas med **perfect-freehand**: en kontur som fylls, inte en linje som
 stryks. `pathFromOutline` i `ink.js` delas av canvasen (`Path2D`) och `toSvg`.
-`thinning: 0` och `simulatePressure: false` är nödvändiga — vi ritar med fast
-bredd, och utan dem gissar biblioteket tryck och strecket blir ojämnt.
+`simulatePressure: false` är alltid på — bibliotekets egen gissning från
+hastighet är precis det som gjorde ett streck ojämnt tjockt. `thinning` är 0
+(fast bredd) om inte punkterna själva bär en riktig `pressure` (M8, en
+ritplatta på datorn — se nedan); Apple Pencil och touch bär aldrig en, så
+iPaden ritar precis som förut.
 
 **Formigenkänning** (`src/shapes.js`, ren geometri utan beroenden): står spetsen
 still — under `STILL_PX` i mer än `HOLD_MS` — byts punkterna mot en idealiserad
@@ -209,6 +212,42 @@ sidrelativa ritpixlar (`scaleRef`, `pageSize.height * SCALE / lådans CSS-höjd`
 sker bara en gång, i `done()`, inte vid varje `pointermove`. Annars hade
 render-loopen och den fångade punktlistan behövt två olika koordinatsystem
 samtidigt.
+
+### Penna på datorn (M8, `src/strokes.js`)
+
+Tre bitar, alla i `strokes.js` och delade av båda ritytorna:
+
+- **Musen markerar i stället för att rita, så fort en riktig penna använts
+  någon gång i fliken.** `penEverUsed` är en modulvariabel, inte del av
+  ritstate — den nollställs aldrig och delas av `Canvas.jsx` och
+  `PageDraw.jsx`, annars skulle en Wacom-platta bredvid en vanlig mus fortsätta
+  låta musen rita av misstag. En dator utan penna märker aldrig av det: musen
+  ritar precis som förut tills en penna faktiskt syns. `PageDraw.jsx` avgör
+  `marking` en gång i `onDown` och läser tillbaka **samma** ref i `onUp` i
+  stället för att fråga `penSeen()` igen där — annars kan de två frågorna
+  hinna svara olika om något ändras mellan nedtryck och släpp. En
+  markeringsklick startar aldrig ett streck, men `down.current` sätts ändå
+  (före kollen som annars avbryter), så klicket fortfarande väljer en placerad
+  figur under sig.
+- **Suddänden.** `isEraserEnd(e)`: spec:en har ingen egen `pointerType` för
+  sudd, den sitter i bit 32 av `buttons` på ett `pen`-event. Kollas som ett
+  extra `||`-villkor bredvid `toolRef.current === 'eraser'` på båda ytorna,
+  aldrig som en egen gren — annars måste sudd-logiken underhållas två gånger.
+  **Går inte att testa i den här molnmiljön**: CDP:s `Input.dispatchMouseEvent`
+  normaliserar tyst vilken `buttons`-bitmask som helst till `1` för ett
+  syntetiskt pennedtryck (mätt med en instrumenterad `pointerdown`-lyssnare,
+  inte antaget) — ingen betrodd sudd-kontakt går att skicka den vägen. Kräver
+  en riktig Wacom-penna i Chrome/Firefox, precis vad M8:s eget klart-kriterium
+  redan säger.
+- **Tryckkänslighet, bara för en riktig ritplatta.** `isDesktopPen(e)`:
+  `pointerType === 'pen'` och `navigator.maxTouchPoints === 0` — det finns
+  ingen `pointerType` som skiljer en Wacom-platta från en Apple Pencil, så
+  frånvaron av en pekskärm får stå för "det här är en ritplatta på en dator".
+  `point(e)` i `Canvas.jsx`/`PageDraw.jsx` lägger bara på ett `pressure`-fält
+  när `isDesktopPen` stämmer; `outlineOf` i `ink.js` slår på `thinning` bara
+  när punkterna faktiskt bär ett sådant fält. Ett Surface-liknande skärm+penna-
+  system (`maxTouchPoints > 0`) räknas alltså inte som skrivbordspenna än —
+  ett medvetet, odokumenterat undantag tills det visar sig spela roll.
 
 ### Rita på utfallet (`src/PageDraw.jsx`)
 

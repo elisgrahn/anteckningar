@@ -6,7 +6,11 @@
 // events report no coalesced events (that's the spec, not a bug), and the
 // app reads pointermove through getCoalescedEvents(), so a synthetic event
 // would silently draw nothing. Only a trusted event exercises the real path.
-export async function penStroke(page, canvas, points) {
+// `forces` (0..1 per point, M8's pressure) and `buttons` (M8's eraser end —
+// 32 is the spec's eraser-in-contact bit) let a caller exercise a Wacom-style
+// pen beyond a plain same-pressure stroke, without every ordinary penStroke
+// call having to know about either.
+export async function penStroke(page, canvas, points, { forces, buttons = 1 } = {}) {
   const client = await page.context().newCDPSession(page);
   const box = await canvas.boundingBox();
   const abs = points.map(([x, y]) => ({ x: box.x + x, y: box.y + y }));
@@ -21,7 +25,8 @@ export async function penStroke(page, canvas, points) {
       ...extra,
     });
 
-  await dispatch('mousePressed', abs[0], { buttons: 1, clickCount: 1 });
-  for (const p of abs.slice(1)) await dispatch('mouseMoved', p, { buttons: 1 });
-  await dispatch('mouseReleased', abs[abs.length - 1], { buttons: 0 });
+  const force = (i) => (forces ? { force: forces[i] } : {});
+  await dispatch('mousePressed', abs[0], { buttons, clickCount: 1, ...force(0) });
+  for (let i = 1; i < abs.length; i++) await dispatch('mouseMoved', abs[i], { buttons, ...force(i) });
+  await dispatch('mouseReleased', abs[abs.length - 1], { buttons: 0, ...force(abs.length - 1) });
 }

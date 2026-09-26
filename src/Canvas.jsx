@@ -142,30 +142,35 @@ export default function Canvas({ initialStrokes, name, onDone, onCancel, pageSiz
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
+  // A point to draw with: local() plus a real pressure value on a desktop
+  // tablet pen (M8), so outlineOf in ink.js can draw with it. Never for a
+  // touch/erase hit-test, only for what ends up in the stroke.
+  const point = (e) => (draw.isDesktopPen(e) ? { ...local(e), pressure: e.pressure } : local(e));
+
   const onDown = (e) => {
     if (!draw.allowPointer(s.current, e.pointerType)) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = local(e);
-    if (toolRef.current === 'eraser') {
+    if (toolRef.current === 'eraser' || draw.isEraserEnd(e)) {
       s.current.erasedThisDrag = false;
       if (draw.eraseAt(s.current, p.x, p.y)) setUndoCount(s.current.undo.length);
       return;
     }
-    draw.beginStroke(s.current, p, colorRef.current, PEN_WIDTH);
+    draw.beginStroke(s.current, point(e), colorRef.current, PEN_WIDTH);
   };
 
   const onMove = (e) => {
     if (e.buttons === 0) return;
     if (!draw.allowPointer(s.current, e.pointerType)) return;
     const evs = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
-    if (toolRef.current === 'eraser') {
+    if (toolRef.current === 'eraser' || draw.isEraserEnd(e)) {
       for (const ev of evs) {
         const p = local(ev);
         if (draw.eraseAt(s.current, p.x, p.y)) setUndoCount(s.current.undo.length);
       }
       return;
     }
-    draw.extendStroke(s.current, evs.map(local));
+    draw.extendStroke(s.current, evs.map(point));
   };
 
   const onUp = () => {

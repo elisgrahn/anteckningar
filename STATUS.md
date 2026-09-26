@@ -4,33 +4,32 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Läge
 
-Skeppat senast: M7 (handskrivna sidor, #10 — sammanslagen och verifierad
-mot en riktig kompilering i webbläsaren, inte bara testsviten), och en
-gren-sammanslagning med den parallella sessionens arbete (M2:s definitiva
-slutsats om spann, issue #14 punkt 1–3, processreglerna, font-fixen).
+Skeppat senast: M8 (penna på datorn) — musen markerar i stället för att
+rita så fort en riktig penna setts i fliken, suddänden hanteras
+(`isEraserEnd`, overifierad här, se Lärdomar), och en riktig ritplatta
+ritar med sitt eget tryck (`isDesktopPen`) utan att röra Apple
+Pencil/touch. Elis svarade via `AskUserQuestion`: M6:s projekt ska heta
+`tsks15`, och M8 är näst uppgift efter M7.
 
-M2 kräver en egen wasm-modul, ingen kod skriven än. M6-frågan (vilket namn
-dagens `document/` ska få) ställs om via `AskUserQuestion` i den här
-sessionen, i stället för den gamla GitHub-kommentaren.
+M2 kräver en egen wasm-modul, ingen kod skriven än. M6 väntar bara på att
+namnet (nu känt: `tsks15`) faktiskt implementeras.
 
-Nästa uppgift: M8 (penna på datorn, oberoende av allt annat), M2:s
-wasm-modul (`wasm-pack`/`wasm32`-target saknas), eller vänta på Elis
-besked (M5, M6, #14 punkt 4).
+Nästa uppgift: M2:s wasm-modul (`wasm-pack`/`wasm32`-target saknas), M6
+(namnet är klart, resten av förslaget kan börja), eller vänta på Elis
+besked (M5, #14 punkt 4, och en verklig testbegäran för M8:s suddände).
 
 ## Nu
 
-M0, M1 (avfärdad), M4 och M7 är klara. M2 (⛔): definitivt svar — en egen
-wasm-modul krävs, ingen väg runt det. Näst steg: patcha
-`SHOULD_ATTACH_DEBUG_INFO` i en fork av typst.ts, bygg med `wasm-pack` för
-`wasm32`, mät storleken (M2:s eget klart-kriterium för spiken). M3 väntar
-på M2. M6 (⛔): designförslag klart (issue #9), väntar bara på vilket namn
-dagens `document/`-mapp ska få som projekt — frågan är ställd som en
-GitHub-kommentar från innan `AskUserQuestion`-regeln, bör ställas om.
-Issue #14 (`prio`): punkt 1–3 klara (#17), punkt 4 kvar (beslut, rör
-invariant 2), och själva issuen väntar på Elis test på iPaden under en
-riktig föreläsning. M5 (⛔, server utan hemdator): Elis diskuterar Google
-Drive i stället för Supabase, väntar på hans beslut. M8 saknar beroenden
-till M1–M6 och kan påbörjas när som helst.
+M0, M1 (avfärdad), M4, M7 och M8 är klara (M8 delvis overifierad, se
+Väntar på Elis). M2 (⛔): definitivt svar — en egen wasm-modul krävs, ingen
+väg runt det. Näst steg: patcha `SHOULD_ATTACH_DEBUG_INFO` i en fork av
+typst.ts, bygg med `wasm-pack` för `wasm32`, mät storleken (M2:s eget
+klart-kriterium för spiken). M3 väntar på M2. M6 (⛔): designförslag klart
+(issue #9), Elis svarade `tsks15` via `AskUserQuestion` — bara
+implementationen är kvar. Issue #14 (`prio`): punkt 1–3 klara (#17), punkt
+4 kvar (beslut, rör invariant 2), och själva issuen väntar på Elis test på
+iPaden under en riktig föreläsning. M5 (⛔, server utan hemdator): Elis
+diskuterar Google Drive i stället för Supabase, väntar på hans beslut.
 
 ## Klart
 
@@ -74,18 +73,44 @@ till M1–M6 och kan påbörjas när som helst.
   riktig kompilering i en headless webbläsare (28 ms, inte simulerat) —
   möjligt nu när font-fixen (#15) fungerar. Sammanslagen:
   https://github.com/elisgrahn/anteckningar/pull/10
+- **M8.** Tre bitar, alla i `src/strokes.js` och delade av `Canvas.jsx`/
+  `PageDraw.jsx`: (1) `penEverUsed`, en modulvariabel som aldrig
+  nollställs — musen markerar (väljer, drar en placerad figur) i stället
+  för att rita så fort en riktig penna synts i fliken, en dator utan penna
+  märker aldrig av det. `PageDraw.jsx`s `onDown` avgör detta en gång i en
+  `marking`-ref och `onUp` läser tillbaka samma ref i stället för att
+  fråga igen, så de två aldrig kan svara olika. (2) `isEraserEnd` — bit 32
+  i `buttons` på ett `pen`-event, ingen egen `pointerType`. (3)
+  `isDesktopPen` (`pointerType === 'pen' && maxTouchPoints === 0`) styr om
+  ett fångat streck bär ett riktigt `pressure`-fält; `outlineOf` i
+  `ink.js` slår bara på tryckkänslig `thinning` när det gör det, så Apple
+  Pencil/touch ritar precis som förut. Tre test (`e2e/mouse-marks.spec.js`,
+  `e2e/wacom.spec.js`): mus-markering (verifierat i två steg — dels att
+  en trasig gate släpper igenom ett streck, dels att `onUp`s egen
+  omskrivna väljning fortsatte fungera efter omskrivningen) och att en
+  ritplattas streck sparas med sitt riktiga tryck (`Math.max - Math.min`
+  på de sparade punkternas `pressure` — ett test som först flakade i hela
+  svepet, spårat till att "Draw" återupptog en gammal figur i det delade
+  testdokumentet i stället för att öppna en ny, fixat genom att alltid
+  säkra en tom rad före `Draw` och läsa det **sista** figurnamnet i texten,
+  inte det första). Suddänden går **inte** att verifiera här: CDP:s
+  `Input.dispatchMouseEvent` normaliserar tyst varje `buttons`-bitmask
+  till `1` för ett syntetiskt pennedtryck (mätt med en instrumenterad
+  `pointerdown`-lyssnare) — kräver en riktig Wacom-penna, se Väntar på
+  Elis.
 - **M1, avfärdat.** Elis: testsviten + git-historiken räcker, han behöver
   inte kunna kolla en PR från iPaden före sammanslagning. Ingen
   Vercel-koppling görs. https://github.com/elisgrahn/anteckningar/issues/2
   (stängd, "not planned").
-- **M6, designförslaget.** Fritt filträd som en platt lista projekt under
-  `notes/<namn>/` (samma `main.typ` + `figures/` som idag, en kurs med
-  flera föreläsningar är fortfarande en enda fil som `#include`:ar andra),
-  route-prefix `/api/:project/...`, klienten remountar hela `App` vid
-  projektbyte i stället för att bygga om synken för ett byte i farten.
-  Enda blockerande frågan: vilket namn dagens `document/` ska få.
-  https://github.com/elisgrahn/anteckningar/issues/9 (bör ställas om via
-  `AskUserQuestion`, se Väntar på Elis).
+- **M6, designförslaget, plus namnet.** Fritt filträd som en platt lista
+  projekt under `notes/<namn>/` (samma `main.typ` + `figures/` som idag,
+  en kurs med flera föreläsningar är fortfarande en enda fil som
+  `#include`:ar andra), route-prefix `/api/:project/...`, klienten
+  remountar hela `App` vid projektbyte i stället för att bygga om synken
+  för ett byte i farten. Elis svarade `tsks15` på namnfrågan via
+  `AskUserQuestion` (den gamla GitHub-kommentaren i
+  https://github.com/elisgrahn/anteckningar/issues/9 ersatt). Ingen
+  implementation ännu.
 - **M2, spiken (tre omgångar, definitivt svar).** Läst källkoden på
   `Myriad-Dreamin/typst.ts` (den `typst-ts-web-compiler`/`-renderer` vi
   redan beror på, v0.7.0) via GitHubs kodsökning och en lokal klon, inte
@@ -144,10 +169,12 @@ till M1–M6 och kan påbörjas när som helst.
   ingen egen backend alls — bara statisk hosting kvar att lösa (Vercel
   eller vad som är enklast). Han vill tänka mer innan han bestämmer sig;
   inget byggs förrän han svarar.
-- **M6 (⛔, blockerar inget annat).** Designförslaget är klart (se Klart);
-  bara namnet på dagens `document/`-projekt är den blockerande frågan.
-  Ställd som en GitHub-kommentar innan `AskUserQuestion`-regeln fanns
-  (issue #9) — bör ställas om i en session.
+- **M8, testbegäran (⛔ inget, blockerar bara detta).** Prova en riktig
+  Wacom-penna i Chrome och Firefox: (1) rita med olika tryck — strecket
+  ska bli tunnare/tjockare; (2) vänd pennan och sudda — det ska sudda, inte
+  rita; (3) med pennan använd en gång, dra musen — ingen ny figur ska
+  uppstå, bara markering/val. Kan inte verifieras i molnmiljön (se Klart
+  och Lärdomar).
 - Issue #14 väntar på Elis eget test på iPaden under en riktig föreläsning
   innan den kan stängas (dess klart-kriterium, inte något kod kan
   verifiera åt honom).
@@ -233,8 +260,9 @@ till M1–M6 och kan påbörjas när som helst.
   `vision/arbetssatt` (#12), `vision/hur-elis-involveras` (#13),
   `fix/typst-default-font-assets` (#15),
   `feat/continue-placed-figure-on-tap` (#17), `status/branch-cleanup-list`
-  (#16), `status/session-wrap` (#18), `m7-handwritten-pages` (#10), och
-  `status/m7-merged` (den här PR:en) så fort den är sammanslagen.
+  (#16), `status/session-wrap` (#18), `m7-handwritten-pages` (#10),
+  `status/m7-merged` (#20), och `m8-pen-on-computer` (den här PR:en) så
+  fort den är sammanslagen.
 
 - **`cargo`/`rustc` finns i molnmiljön (1.94.1), men `wasm-pack` och
   `wasm32-unknown-unknown`-target gör det inte.** Behövs för M2:s riktiga
@@ -242,6 +270,34 @@ till M1–M6 och kan påbörjas när som helst.
   installerat i den här sessionen — nästa som tar M2 vidare behöver
   `rustup target add wasm32-unknown-unknown` och `cargo install wasm-pack`
   (eller `npm i -g wasm-pack`) innan `wasm-pack build` går att köra.
+
+- **CDP:s `Input.dispatchMouseEvent` kan inte simulera stiftets suddände.**
+  Vilken `buttons`-bitmask som helst (t.ex. 32, spec:ens eraser-bit)
+  normaliseras tyst till `1` för ett syntetiskt `pointerType: 'pen'`-event
+  — bekräftat genom att lägga en `pointerdown`-lyssnare direkt i sidan och
+  läsa av `e.buttons`, inte gissat. `force` (tryck) fungerar dock fint och
+  går rakt igenom till `PointerEvent.pressure`. Ingen känd väg runt det för
+  suddänden; kräver riktig hårdvara.
+
+- **`e2e`-tester som delar samma testdokument kan råka öppna varandras
+  figurer.** "Draw"/`Cmd-I` fortsätter figuren på editorns *aktuella* rad
+  om den råkar matcha `image(...)` — och markören står kvar där förra
+  testet lämnade den (ofta en nyss infogad bildrad), inte vid ett tomt
+  dokument. Ett test som förutsätter en helt ny figur måste säkra en tom
+  rad (`Control+End` + `Enter`) innan det klickar Draw, och läsa ut det
+  **sista** `figures/f-NN.svg`-namnet i källan, inte det första — annars
+  läser det tillbaka en gammal figurs redan sparade streck i stället för
+  sina egna. Upptäckt när ett tryckkänslighetstest fick `pressure: 0` i
+  hela svepet men bara när det kördes efter andra ritande test, aldrig
+  ensamt.
+
+- **Ett befintligt test kan flaka under 2 parallella workers, inte under 1.**
+  Bekräftat igen (redan noterat av en tidigare session för `queue.spec.js`):
+  flera testfiler som samtidigt skriver mot samma delade `document/`-
+  temp-mapp (`ANTECKNINGAR_DOCUMENT_DIR`, en mapp för hela körningen, inte
+  per test) kan racea om samma fil. `npx playwright test --workers=1` är
+  det pålitliga sättet att verifiera en ändring lokalt; CI:s `retries: 1`
+  är den nuvarande mildringen, ingen riktig fix.
 
 - Hör något av det här hemma permanent i stället för i den här loggen, flytta
   det till `CLAUDE.md` i en senare PR.

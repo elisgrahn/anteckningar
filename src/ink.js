@@ -37,17 +37,26 @@ export function pathFromOutline(outline) {
   return d + ' Z';
 }
 
-// thinning: 0 and simulatePressure: false turn off the library's guess at pen
-// pressure — we draw at a fixed width (stroke.width), and without them the
-// stroke comes out unevenly thick. getStroke handles a single point (a dot)
-// and two points (a capsule) on its own, so no special case is needed here.
-// last: true draws the outline all the way to the final point; without it the
-// stroke ends a few pixels behind the pen, and the error grows with the size.
+// simulatePressure: false always — the library's own guess from speed is what
+// used to make a stroke come out unevenly thick, and no input on either
+// surface should have its width decided by how fast the hand moved.
+//
+// thinning is 0 (fixed width) unless the points themselves carry a real
+// `pressure` value (M8: a desktop tablet pen — see isDesktopPen in
+// strokes.js). Apple Pencil and touch points never carry one, so iPad
+// drawing is exactly as before; a Wacom-style pen on a computer draws with
+// its actual pressure instead.
+//
+// getStroke handles a single point (a dot) and two points (a capsule) on its
+// own, so no special case is needed here. last: true draws the outline all
+// the way to the final point; without it the stroke ends a few pixels behind
+// the pen, and the error grows with the size.
 //
 // Shared so that the two drawing surfaces and the saved file cannot drift apart
 // on these options.
 export function outlineOf(points, size) {
-  return getStroke(points, { size, thinning: 0, simulatePressure: false, last: true });
+  const pressureSensitive = points.some((p) => typeof p.pressure === 'number');
+  return getStroke(points, { size, thinning: pressureSensitive ? 0.6 : 0, simulatePressure: false, last: true });
 }
 
 function pathFrom(points, width) {

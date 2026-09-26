@@ -9,8 +9,10 @@ import * as draw from './strokes.js';
 //
 // The interaction model is the one the palm rejection already implies: the pen
 // draws, the finger scrolls. No mode button to forget, and an iPad without a
-// pencil behaves exactly as before. A mouse draws too — a laptop has no pen,
-// and the preview is a backdrop, not a text you select from.
+// pencil behaves exactly as before. A mouse draws too, until a real pen has
+// been used anywhere in the tab (M8, src/strokes.js's penSeen) — a laptop
+// with no pen at all keeps drawing with the mouse forever, but once there is
+// a pen, an ordinary mouse only marks (selects, drags a placed figure).
 //
 // Points are kept in drawn pixels (page points times SCALE) rather than in
 // screen pixels, so a figure is the same size whatever the preview is scaled
@@ -122,6 +124,10 @@ export default function PageDraw({
     return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k };
   };
 
+  // A point to draw with: local() plus a real pressure value on a desktop
+  // tablet pen (M8) — see the identical helper in Canvas.jsx.
+  const point = (e) => (draw.isDesktopPen(e) ? { ...local(e), pressure: e.pressure } : local(e));
+
   /** Which page a drawn-pixel y belongs to, and where on it, in points. */
   const onPage = (drawn) => pageAt(pages, drawn.y / SCALE);
 
@@ -141,6 +147,10 @@ export default function PageDraw({
   const finger = useRef(null);
   const down = useRef(null);
   const moving = useRef(null);
+  // Whether the press that's still down was a marking-only mouse (M8) — set
+  // once in onDown and read back in onUp, rather than re-derived there,
+  // so the two never disagree about what this particular press was.
+  const marking = useRef(false);
   // Set when the current drawing session is adding to a figure already on the
   // page rather than starting a new one — the placed item it belongs to, and
   // the origin its ink had before this session touched it (for the same
@@ -158,7 +168,11 @@ export default function PageDraw({
       finger.current = { y: e.clientY, top: scrollerRef.current?.scrollTop ?? 0 };
       return;
     }
-    if (!draw.allowPointer(s.current, e.pointerType, false)) return;
+    // M8: a mouse marks instead of draws once a pen has been seen anywhere in
+    // the tab. It still selects and drags a placed figure below — "marks" —
+    // it just never starts or extends a stroke.
+    const canDraw = draw.allowPointer(s.current, e.pointerType, false);
+    marking.current = !canDraw;
     e.currentTarget.setPointerCapture(e.pointerId);
 
     // Inside the selected figure's border the drag moves it instead of drawing.
@@ -174,7 +188,11 @@ export default function PageDraw({
     }
 
     const p = local(e);
-    if (toolRef.current === 'eraser') {
+    // Recorded before the canDraw check, so onUp's tap-to-select still works
+    // for a marking-only mouse even though nothing below it runs.
+    down.current = { at: performance.now(), p };
+    if (!canDraw) return;
+    if (toolRef.current === 'eraser' || draw.isEraserEnd(e)) {
       s.current.erasedThisDrag = false;
       if (draw.eraseAt(s.current, p.x, p.y)) after();
       return;
@@ -203,8 +221,7 @@ export default function PageDraw({
       }
     }
     s.current.page = onPage(p).page;
-    down.current = { at: performance.now(), p };
-    draw.beginStroke(s.current, p, colorRef.current, PEN_WIDTH);
+    draw.beginStroke(s.current, point(e), colorRef.current, PEN_WIDTH);
   };
 
   const onMove = (e) => {
@@ -221,14 +238,14 @@ export default function PageDraw({
     }
     if (!draw.allowPointer(s.current, e.pointerType, false)) return;
     const evs = e.nativeEvent.getCoalescedEvents ? e.nativeEvent.getCoalescedEvents() : [e.nativeEvent];
-    if (toolRef.current === 'eraser') {
+    if (toolRef.current === 'eraser' || draw.isEraserEnd(e)) {
       for (const ev of evs) {
         const p = local(ev);
         if (draw.eraseAt(s.current, p.x, p.y)) after();
       }
       return;
     }
-    draw.extendStroke(s.current, evs.map(local));
+    draw.extendStroke(s.current, evs.map(point));
   };
 
   const onUp = (e) => {
@@ -252,10 +269,19 @@ export default function PageDraw({
       return;
     }
 
+    const d = down.current;
+    // M8: a marking-only mouse (decided once in onDown, not re-derived here)
+    // never started a stroke, so there's nothing below to cancel and nothing
+    // to check for movement against — a plain click just selects whatever is
+    // under it.
+    if (d && marking.current) {
+      setSelected(hitPlaced(placed, d.p.x / SCALE, d.p.y / SCALE)?.name ?? null);
+      return;
+    }
+
     // A quick tap that went nowhere is a click, not a mark. Without this the
     // double click that jumps to the source would leave two dots behind. The
     // tap is also what selects a figure already on the page.
-    const d = down.current;
     const points = s.current.current?.points;
     if (d && points && performance.now() - d.at < TAP_MS) {
       const far = points.some((p) => Math.hypot(p.x - d.p.x, p.y - d.p.y) > TAP_PX);

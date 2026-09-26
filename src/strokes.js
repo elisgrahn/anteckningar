@@ -41,6 +41,15 @@ export function remember(st, state) {
   if (st.undo.length > HISTORY_MAX) st.undo.shift();
 }
 
+// M8: once a real pen has drawn anywhere in this tab, the mouse switches
+// from drawing to marking (selecting, dragging a placed figure) — a Wacom
+// tablet used next to an ordinary mouse must not turn an incidental mouse
+// drag into a stroke. Module-level and never reset, so both drawing
+// surfaces agree (see the file header) and a laptop that never sees a pen
+// keeps today's mouse-draws behaviour forever.
+let penEverUsed = false;
+export const penSeen = () => penEverUsed;
+
 /**
  * May this pointer draw?
  *
@@ -52,11 +61,24 @@ export function remember(st, state) {
 export function allowPointer(st, pointerType, fingerDraws = true) {
   if (pointerType === 'pen') {
     st.lastPenAt = performance.now();
+    penEverUsed = true;
     return true;
   }
   if (pointerType === 'touch') return fingerDraws && performance.now() - st.lastPenAt > PALM_MS;
-  return true; // mouse, trackpad: no wrist to reject
+  if (pointerType === 'mouse') return !penEverUsed; // M8: marks, doesn't draw, once a pen exists
+  return true;
 }
+
+// The eraser end of a stylus is not a separate pointerType — the spec has it
+// report pointerType "pen" with the eraser bit set in `buttons` instead.
+export const isEraserEnd = (e) => e.pointerType === 'pen' && (e.buttons & 32) !== 0;
+
+// A graphics tablet's pen, as opposed to a touchscreen's (Apple Pencil):
+// real analog pressure is worth drawing with on one and not the other (see
+// ink.js's outlineOf), and there's no pointerType for that distinction —
+// maxTouchPoints stands in for "this is a desktop with a separate tablet",
+// which is what M8 actually targets.
+export const isDesktopPen = (e) => e.pointerType === 'pen' && navigator.maxTouchPoints === 0;
 
 export function beginStroke(st, p, color, width) {
   st.current = { color, width, points: [p] };
