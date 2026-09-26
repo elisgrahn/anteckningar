@@ -4,23 +4,18 @@ Läs det här efter `VISION.md` och `CLAUDE.md`, innan du gör något annat.
 
 ## Läge
 
-Skeppat senast: M7 (handskrivna sidor, #10) och en definitiv slutsats på
-M2:s öppna fråga (issue #3) — dagens npm-paket kan inte emittera spann,
-oavsett JS-anrop, för `SHOULD_ATTACH_DEBUG_INFO` är en Rust-**konstant**,
-inte en körtidsflagga. Kräver en egen wasm-modul, precis vad VISION.md
-redan sa. Ingen kod skriven än för den, bara research (se Lärdomar).
+Skeppat senast: M7 (handskrivna sidor, #10 — sammanslagen och verifierad
+mot en riktig kompilering i webbläsaren, inte bara testsviten), och en
+gren-sammanslagning med den parallella sessionens arbete (M2:s definitiva
+slutsats om spann, issue #14 punkt 1–3, processreglerna, font-fixen).
 
-**Pågående diskussion med Elis:** M5 (⛔, server som inte kräver hemdatorn)
-— han vill undvika Supabase, föreslog Google Drive i stället. Ingen har
-frågat honom om M6 (⛔, filträd) än via `AskUserQuestion` — den frågan
-ligger bara som en GitHub-kommentar från innan processreglerna ändrades
-(issue #9), och bör ställas om.
+M2 kräver en egen wasm-modul, ingen kod skriven än. M6-frågan (vilket namn
+dagens `document/` ska få) ställs om via `AskUserQuestion` i den här
+sessionen, i stället för den gamla GitHub-kommentaren.
 
-Nästa uppgift: bygga och mäta den egna wasm-modulen (M2, `wasm-pack` +
-`wasm32`-target saknas än), M8 (penna på datorn, oberoende av M2/M5/M6),
-eller punkt 4 i #14 (kräver ett beslut, rör invariant 2). Väntar på Elis:
-M5-beslutet, M6-frågan (bör ställas på nytt via `AskUserQuestion`), och
-#14 väntar på hans test på iPaden under en riktig föreläsning.
+Nästa uppgift: M8 (penna på datorn, oberoende av allt annat), M2:s
+wasm-modul (`wasm-pack`/`wasm32`-target saknas), eller vänta på Elis
+besked (M5, M6, #14 punkt 4).
 
 ## Nu
 
@@ -74,7 +69,11 @@ till M1–M6 och kan påbörjas när som helst.
   vanlig `figureCode` i `finishCanvas`, testet slog rött, återställt innan
   commit), och ett andra test kör riktig `typst compile` på en liten fixtur
   och kontrollerar att exakt tre sidor kommer ut (text, den ritade sidan,
-  text) — mätt, inte antaget. PR: https://github.com/elisgrahn/anteckningar/pull/10
+  text) — mätt, inte antaget. Sammanslagen med main (processreglerna,
+  M2:s slutsats, issue #14) innan sammanslagning, och verifierad mot en
+  riktig kompilering i en headless webbläsare (28 ms, inte simulerat) —
+  möjligt nu när font-fixen (#15) fungerar. Sammanslagen:
+  https://github.com/elisgrahn/anteckningar/pull/10
 - **M1, avfärdat.** Elis: testsviten + git-historiken räcker, han behöver
   inte kunna kolla en PR från iPaden före sammanslagning. Ingen
   Vercel-koppling görs. https://github.com/elisgrahn/anteckningar/issues/2
@@ -234,8 +233,8 @@ till M1–M6 och kan påbörjas när som helst.
   `vision/arbetssatt` (#12), `vision/hur-elis-involveras` (#13),
   `fix/typst-default-font-assets` (#15),
   `feat/continue-placed-figure-on-tap` (#17), `status/branch-cleanup-list`
-  (#16), `status/session-wrap` (#18), och `m7-handwritten-pages` (#10) så
-  fort den PR:en är sammanslagen.
+  (#16), `status/session-wrap` (#18), `m7-handwritten-pages` (#10), och
+  `status/m7-merged` (den här PR:en) så fort den är sammanslagen.
 
 - **`cargo`/`rustc` finns i molnmiljön (1.94.1), men `wasm-pack` och
   `wasm32-unknown-unknown`-target gör det inte.** Behövs för M2:s riktiga
